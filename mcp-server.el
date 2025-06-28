@@ -105,7 +105,7 @@
 			      (mapcar (lambda (p)
 					(list (required-pr p :name)
 					      `(type . ,(required-pr p :type))
-					      `(required . ,(optional-pr p :required))
+					      `(required . ,(optional-pr p :required :json-false))
 					      `(description . ,(or (optional-pr p :description) ""))))
 				      (optional-pr tl :properties))))
 			`((name . ,(required-pr tl :name))
