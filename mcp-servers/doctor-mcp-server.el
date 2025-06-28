@@ -25,7 +25,8 @@
 (cl-defmethod mcp-server-enumerate-tools ((this doctor-mcp-server))
   '(
     (:name "talk-to-doctor" :description "Talk to Emacs doctor"
-	   :properties ((:name message :type "string" :required t :description "Next message to Emacs doctor."))
+	   :properties ((:name message :type "string" :required t :description "Next message to Emacs doctor.")
+			(:name think-for :type "integer" :required nil :description "Number of seconds Emacs doctor should think over your problem."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (require 'doctor)
 			   (unless (get-buffer "*doctor*")
@@ -42,6 +43,14 @@
 				    (buffer-substring-no-properties (+ pt 1 (length msg)) (point)))
 			      (setq doctor-response (string-trim doctor-response))
 			      
-			      (mcp-server-write-tool-call-text-result request doctor-response cb-response)))))
+			      (run-with-timer
+			       (or (gethash "think-for" arguments) 0)
+			       nil
+			       (lambda (request doctor-response cb-response)
+				 (mcp-server-write-tool-call-text-result request doctor-response cb-response)
+				 (message "Pretended to care and responded with: \"%s\" " doctor-response))
+			       request
+			       doctor-response
+			       cb-response)))))
     )
   )
