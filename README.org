@@ -1,0 +1,43 @@
+** mcp-server.el
+
+A library for implementing MCP servers in Emacs lisp.
+
+*** How to implement new servers
+1. Inherit from the mcp-server class
+   #+begin_src elisp
+       (defclass my-mcp-server (mcp-server)
+	 (()))
+   #+end_src
+2. Override one or more methods as appropriate. E.g., to implement
+   tools, return one or more tool definitions as shown below.
+   #+begin_src elisp
+     (cl-defmethod mcp-server-enumerate-tools ((this my-mcp-server))
+       '(
+         (:name "name-of-the-tool" :description "Tool description"
+     	   :properties ((:name argument1 :type "string" :required t :description "Argument 1 description.")
+     			(:name argument2 :type "boolean" :required t :description "Argument 2 description."))
+     	   :async-lambda (lambda (request arguments cb-response)
+     			   (mcp-server-write-tool-call-text-result ;; helper 
+     			     request ;; the incoming request
+     			     (format "Hello %s!" (gethash "argument1" arguments)) ;; retrieve the argument to produce text result.
+     			      cb-response ;; call-back handle
+     			      )
+     			   ))
+         )
+       )
+   #+end_src
+3. Sample implementation see [[file:mcp-servers/doctor-mcp-server.el]]
+
+*** Use with a file based transport
+1. Ensure that the directories containing the .el files below are in
+   your load path.
+2. Load/require mcp-server-file-transport.el
+3. Load/require your-mcp-server-lib.el
+4. M-x server-start
+5. Configure server.sh as your mcp server
+   - command = sh
+   - first argument = full path to server.sh
+   - second argument = *name-of-your-mcp-server-class*.
+
+*** Demo - Github Copilot visits Emacs Psychotherapist (doctor)
+[[./demos/llm-visits-the-doctor.gif]]
