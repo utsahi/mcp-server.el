@@ -30,7 +30,7 @@
 	   :async-lambda (lambda (request arguments cb-response)
 			   (require 'doctor)
 			   (unless (get-buffer "*doctor*")
-			     (call-interactively 'doctor))
+			     (doctor))
 			   (with-current-buffer "*doctor*"
 			    (end-of-buffer)
 			    (let* ((msg (gethash "message" arguments))
