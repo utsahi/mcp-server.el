@@ -98,14 +98,14 @@
 (cl-defgeneric mcp-server-process-tools-list-request (obj request cb-response))
 (cl-defmethod mcp-server-process-tools-list-request ((this mcp-server) request cb-response)
   (let* ((tools
-	  (cl-flet ((required-pr (lambda (l p) (or (plist-get l p) (error "%s not specified." p))))
+	  (cl-flet ((required-pr (lambda (l p) (or (plist-member l p) (error "%s not specified." p)) (plist-get l p)))
 		    (optional-pr (lambda (l p &optional d) (or (plist-get l p) d))))
 	    (mapcar (lambda (tl)
 		      (let* ((properties
 			      (mapcar (lambda (p)
 					(list (required-pr p :name)
 					      `(type . ,(required-pr p :type))
-					      `(required . ,(optional-pr p :required :json-false))
+					      `(required . ,(or (required-pr p :required) :json-false))
 					      `(description . ,(or (optional-pr p :description) ""))))
 				      (optional-pr tl :properties))))
 			`((name . ,(required-pr tl :name))
