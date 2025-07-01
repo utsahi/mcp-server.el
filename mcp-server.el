@@ -98,20 +98,28 @@
 (cl-defgeneric mcp-server-process-tools-list-request (obj request cb-response))
 (cl-defmethod mcp-server-process-tools-list-request ((this mcp-server) request cb-response)
   (let* ((tools
-	  (cl-flet ((required-pr (lambda (l p) (or (plist-member l p) (error "%s not specified." p)) (plist-get l p)))
+	  (cl-flet ((required-pr (lambda (l p &optional allow-nil)
+				   (or (plist-member l p) (error "%s not specified." p))
+				   (if allow-nil
+				     (plist-get l p)
+				     (or (plist-get l p) (error "%s canot be null." p)))))
 		    (optional-pr (lambda (l p &optional d) (or (plist-get l p) d))))
 	    (mapcar (lambda (tl)
 		      (let* ((properties
 			      (mapcar (lambda (p)
 					(list (required-pr p :name)
 					      `(type . ,(required-pr p :type))
-					      `(required . ,(or (required-pr p :required) :json-false))
 					      `(description . ,(or (optional-pr p :description) ""))))
-				      (optional-pr tl :properties))))
+				      (optional-pr tl :properties)))
+			     (required
+			      (cl-loop for p in (optional-pr tl :properties)
+				       if (required-pr p :required t)
+				       collect (required-pr p :name))))
 			`((name . ,(required-pr tl :name))
 			  (description . ,(required-pr tl :description))
 			  (inputSchema (type . "object")
-				       (properties . ,properties))))
+				       (properties . ,properties)
+				       (required . ,required))))
 		      )
 		    (mcp-server-enumerate-tools this)))))
     (mcp-server-write-json-line

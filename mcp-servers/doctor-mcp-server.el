@@ -26,7 +26,7 @@
   '(
     (:name "talk-to-doctor" :description "Talk to Emacs doctor"
 	   :properties ((:name message :type "string" :required t :description "Next message to Emacs doctor.")
-			(:name think-for :type "integer" :required nil :description "Number of seconds Emacs doctor should think over your problem."))
+			(:name think-for :type "number" :required nil :description "Number of seconds Emacs doctor should think over your problem."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (require 'doctor)
 			   (unless (get-buffer "*doctor*")
