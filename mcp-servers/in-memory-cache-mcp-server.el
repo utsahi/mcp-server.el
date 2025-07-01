@@ -27,10 +27,10 @@
 
 (defvar in-memory-cache-mcp-server-partitions (make-hash-table :test 'equal))
 
-(defun in-memory-cache-mcp-server-ensure-partition (request-arguments)
+(defun in-memory-cache-mcp-server-ensure-partition (request-arguments create)
   (let* ((partition (or (gethash "partition" arguments) "default")))
     (or (gethash partition in-memory-cache-mcp-server-partitions)
-	(puthash partition (make-hash-table :test 'equal) in-memory-cache-mcp-server-partitions))))
+	(when create (puthash partition (make-hash-table :test 'equal) in-memory-cache-mcp-server-partitions)))))
 
 (cl-defmethod mcp-server-enumerate-tools ((this in-memory-cache-mcp-server))
   '(
@@ -39,26 +39,37 @@
 			(:name value :type "string" :required t :description "The value.")
 			(:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
-			   (let* ((ht (in-memory-cache-mcp-server-ensure-partition arguments)))
-			     (puthash (gethash "key" arguments) (gethash "value" arguments) ht)
-			     )
-			   (mcp-server-write-tool-call-text-result request "0" cb-response)))
+			   (let* ((ht (in-memory-cache-mcp-server-ensure-partition arguments t)))
+			     (puthash (gethash "key" arguments) (gethash "value" arguments) ht))
+			   (mcp-server-write-tool-call-text-result request "Success" cb-response)))
+    
+    (:name "get-cache-entry" :description "Get the entry from the in-memory cache."
+	   :properties ((:name key :type "string" :required t :description "The key.")			
+			(:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
+	   :async-lambda (lambda (request arguments cb-response)
+			   (let* ((ht (in-memory-cache-mcp-server-ensure-partition arguments nil)))
+			     (mcp-server-write-tool-call-text-result request
+								     (or (gethash (gethash "key" arguments) ht) (error "Cache entry for the key '%s' not found" (gethash "key" arguments)))
+								     cb-response))))
+    
     (:name "get-keys" :description "Enumerate keys in the in-memory cache for the given partition."
 	   :properties ((:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
-			   (let* ((ht (in-memory-cache-mcp-server-ensure-partition arguments)))
+			   (let* ((ht (in-memory-cache-mcp-server-ensure-partition arguments nil)))
+			     (unless ht (error "Partition not found"))
 			     (mcp-server-write-tool-call-text-result
 			      request
-			      (json-encode (vconcat (hash-table-keys ht)))
+			      (json-encode (vconcat (when ht (hash-table-keys ht))))
 			      cb-response))
 			   ))
+
     (:name "get-partitions" :description "Enumerate partitions in the in-memory cache."
 	   :properties ()
 	   :async-lambda (lambda (request arguments cb-response)
 			   (mcp-server-write-tool-call-text-result
-			      request
-			      (json-encode (vconcat (hash-table-keys in-memory-cache-mcp-server-partitions)))
-			      cb-response)
+			    request
+			    (json-encode (vconcat (hash-table-keys in-memory-cache-mcp-server-partitions)))
+			    cb-response)
 			   ))
     )
   )
