@@ -123,8 +123,8 @@
 			`((name . ,(required-pr tl :name))
 			  (description . ,(required-pr tl :description))
 			  (inputSchema (type . "object")
-				       (properties . ,properties)
-				       (required . ,required))))
+				       (properties . ,(or properties (make-hash-table)))
+				       (required . ,(vconcat required)))))
 		      )
 		    (mcp-server-enumerate-tools this)))))
     (mcp-server-write-json-line
