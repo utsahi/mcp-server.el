@@ -47,8 +47,7 @@
 			       (or (gethash "think-for" arguments) 0)
 			       nil
 			       (lambda (request doctor-response cb-response)
-				 (mcp-server-write-tool-call-text-result request doctor-response cb-response)
-				 (message "Pretended to care and responded with: \"%s\" " doctor-response))
+				 (mcp-server-write-tool-call-text-result request doctor-response cb-response))
 			       request
 			       doctor-response
 			       cb-response)))))

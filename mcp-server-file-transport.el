@@ -25,33 +25,64 @@
 
 (defclass file-promising-future (promising-future)
   ((-request-file :initarg :request-file :initform (error "Must provide :request-file"))
-   (-response-file :initarg :response-file :initform (error "Must provide :response-file")))
+   (-response-file :initarg :response-file :initform (error "Must provide :response-file"))
+   (-timeout-sec :initarg :timeout-sec :initform (error "Must provide :timeout-sec"))
+   (-timeout-timer :initform nil))
   :documentation "Request is read from request-file and response popped into the response-file.")
 
 (cl-defmethod promising-future-on-completion ((this file-promising-future) result)
+  (unless (eq (oref this -state) 'dispatched)
+    (error "Invalid state while writing response %s." (oref this -state)))
+  (when (oref this -timeout-timer)
+    (cancel-timer (oref this -timeout-timer)))
   (with-temp-buffer
     (setq-local require-final-newline nil)
     (insert result)
-    (write-file (oref this -response-file) nil))
+    (let ((save-silently t))
+      (write-file (oref this -response-file) nil)))
   (cl-call-next-method this result))
 
 (cl-defmethod promising-future-schedule ((this file-promising-future) worker)
   (let* ((request (with-temp-buffer
 		    (insert-file-contents-literally (oref this -request-file))
 		    (string-trim-right (buffer-string)))))    
+
     (cl-call-next-method
      this
      (lambda ()
-       (funcall worker request)))))
+       (funcall worker request)))
+    
+    (if (and (oref this -timeout-sec) (not (eq 0 (oref this -timeout-sec))))
+	(oset this -timeout-timer
+	      (run-with-timer
+	       (oref this -timeout-sec)
+	       nil
+	       (lambda (promising-future request)
+		 (let* ((parsed)
+			(req-id))
+		   (condition-case ex
+		       (setq parsed (json-parse-string request))
+		     (error (setq parsed (make-hash-table))))
+		   (setq req-id (or (gethash "id" parsed) 0))
+		   (message "Request with id %d timed out. Sending a timeout error response." req-id)
+		   (promising-future-on-completion
+		    this
+		    (json-encode
+		     `((jsonrpc . "2.0")
+		       (id . ,req-id)
+		       (error . ((code . -32603)
+				 (message . "Timeout.  Server did not respond in a timely manner."))))))))
+	       this
+	       request)))))
 
 (defvar file-promising-future-sessions (make-hash-table :test 'equal))
 
-(defun mcp-server-file-transport-dispatch-request (session mcp-server request-file response-file)
+(defun mcp-server-file-transport-dispatch-request (session mcp-server request-file response-file timeout-sec)
   (let* ((promising-future
 	  (or (gethash session file-promising-future-sessions)
- 	      (puthash session (file-promising-future :request-file request-file :response-file response-file)
+ 	      (puthash session (file-promising-future :request-file request-file :response-file response-file :timeout-sec timeout-sec)
 		       file-promising-future-sessions)))
-	 (server (make-instance mcp-server)))
+	 (server (make-instance mcp-server)))    
     (promising-future-schedule
      promising-future
      (lambda (request)
@@ -60,6 +91,7 @@
 	request
 	(lambda (result)
 	  (promising-future-on-completion promising-future result)))))
+    
     "Request dispatched."))
 
 (defun mcp-server-file-transport-pop-response-if-ready (session)

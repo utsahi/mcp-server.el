@@ -26,6 +26,8 @@ logfile="$logdir/emacs-mcp-server-$session-log.log"
 infile="$logdir/emacs-mcp-server-$session-last-request.json"
 outfile="$logdir/emacs-mcp-server-$session-last-response.json"
 mcpserver=$1
+timeout=${2:-0}
+pollinginterval=1
 
 echo "$(date): Starting emacs-mcp-server" >> "$logfile"
 
@@ -34,24 +36,24 @@ while read -r line; do
     echo $line > $infile
     echo "$(date): Request wc stats: $(wc "$infile")" >> "$logfile"
 
-    if ! emacsclient -e "(mcp-server-file-transport-dispatch-request \"$session\" "$mcpserver" \"$infile\" \"$outfile\")" >> "$logfile"; then
+    if ! emacsclient -e "(mcp-server-file-transport-dispatch-request \"$session\" "$mcpserver" \"$infile\" \"$outfile\" $timeout)" >> "$logfile"; then
 	echo "$(date): Failed to dispatch request" >> "$logfile"
 	break
     fi
 
     while : ; do
-	sleep 0.2
 	ready_output=$(emacsclient -e "(mcp-server-file-transport-pop-response-if-ready \"$session\")")
         if [ $? -ne 0 ]; then
             echo "$(date): Failed to poll for response" >> "$logfile"
             break
         elif [ "$ready_output" != "0" ]; then
 	    echo "$(date): popped the last response. wc stats: $(wc "$outfile")" >> "$logfile"
+	    cat $outfile >> "$logfile"
 	    cat $outfile
             break
 	else
-	    echo "$(date): Response not ready." >> "$logfile"
-	    sleep 1
+	    echo "$(date): Response not ready, sleeping for $pollinginterval sec." >> "$logfile"
+	    sleep $pollinginterval
 	fi
     done
 done
