@@ -26,42 +26,47 @@
 
 (cl-defgeneric mcp-server-process-request (obj request cb-response))
 (cl-defmethod mcp-server-process-request ((this mcp-server) request cb-response)
-  (let* ((parsed-request (json-parse-string request))
-	 (id (gethash "id" parsed-request))
-	 (method (gethash "method" parsed-request)))
-    (condition-case ex	
-	(cond ((string-equal method "initialize")
-	       (mcp-server-process-initialize-request this parsed-request cb-response))
-	      ((string-equal method "notifications/initialized")
-	       (mcp-server-on-notifications-initialized this parsed-request cb-response))
-	      ((string-equal method "notifications/cancelled")
-	       (mcp-server-on-notifications-cancelled this parsed-request cb-response))
-	      ((string-equal method "tools/list")
-	       (mcp-server-process-tools-list-request this parsed-request cb-response))
-	      ((string-equal method "resources/list")
-	       (mcp-server-process-resources-list-request this parsed-request cb-response))
-	      ((string-equal method "resources/templates/list")
-	       (mcp-server-process-resources-templates-list-request this parsed-request cb-response))
-	      ((string-equal method "prompts/list")
-	       (mcp-server-process-prompts-list-request this parsed-request cb-response))
-	      ((string-equal method "ping")
-	       (mcp-server-process-ping-request this parsed-request cb-response))
-	      ((string-equal method "logging/setLevel")
-	       (mcp-server-process-logging-setlevel-request this parsed-request cb-response))
-	      ((string-equal method "tools/call")
-	       (condition-case ex
-		   (mcp-server-process-tools-call-request this parsed-request cb-response)
-		 (error
-		  (mcp-server-write-json-line
-		   cb-response
-		   (mcp-server-compose-tool-call-error id ex)
-		   t))
-		 ))
-	      ((error "Unknown method %s" method)))
-      (error (mcp-server-write-json-line
-	      cb-response
-	      (mcp-server-compose-rpc-server-error id method ex)
-	      t)))))
+  (condition-case outer-ex
+      (let* ((parsed-request (json-parse-string request))
+	     (id (gethash "id" parsed-request))
+	     (method (gethash "method" parsed-request)))
+	(condition-case ex	
+	    (cond ((string-equal method "initialize")
+		   (mcp-server-process-initialize-request this parsed-request cb-response))
+		  ((string-equal method "notifications/initialized")
+		   (mcp-server-on-notifications-initialized this parsed-request cb-response))
+		  ((string-equal method "notifications/cancelled")
+		   (mcp-server-on-notifications-cancelled this parsed-request cb-response))
+		  ((string-equal method "tools/list")
+		   (mcp-server-process-tools-list-request this parsed-request cb-response))
+		  ((string-equal method "resources/list")
+		   (mcp-server-process-resources-list-request this parsed-request cb-response))
+		  ((string-equal method "resources/templates/list")
+		   (mcp-server-process-resources-templates-list-request this parsed-request cb-response))
+		  ((string-equal method "prompts/list")
+		   (mcp-server-process-prompts-list-request this parsed-request cb-response))
+		  ((string-equal method "ping")
+		   (mcp-server-process-ping-request this parsed-request cb-response))
+		  ((string-equal method "logging/setLevel")
+		   (mcp-server-process-logging-setlevel-request this parsed-request cb-response))
+		  ((string-equal method "tools/call")
+		   (condition-case ex
+		       (mcp-server-process-tools-call-request this parsed-request cb-response)
+		     (error
+		      (mcp-server-write-json-line
+		       cb-response
+		       (mcp-server-compose-tool-call-error id ex)
+		       t))
+		     ))
+		  ((error "Unknown method %s" method)))
+	  (error (mcp-server-write-json-line
+		  cb-response
+		  (mcp-server-compose-rpc-server-error id method ex)
+		  t))))
+    (error (mcp-server-write-json-line
+	    cb-response
+	    (mcp-server-compose-rpc-server-error 0 "" outer-ex)
+	    t))))
 
 (cl-defgeneric mcp-server-process-initialize-request (obj request cb-response))
 (cl-defmethod mcp-server-process-initialize-request ((this mcp-server) request cb-response)
