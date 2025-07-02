@@ -20,16 +20,16 @@
 stty -icanon
 session="session-$BASHPID-$$"
 scriptdir=$(realpath $(dirname "${BASH_SOURCE[0]}"))
-logdir="$scriptdir/emacs-mcp-server-logs"
-mkdir -p "$logdir"
-logfile="$logdir/emacs-mcp-server-$session-log.log"
-infile="$logdir/emacs-mcp-server-$session-last-request.json"
-outfile="$logdir/emacs-mcp-server-$session-last-response.json"
 mcpserver=$1
+logdir="$scriptdir/mcp-server.el-logs"
+mkdir -p "$logdir"
+logfile="$logdir/$mcpserver-$session-log.log"
+infile="$logdir/$mcpserver-$session-last-request.json"
+outfile="$logdir/$mcpserver-$session-last-response.json"
 timeout=${2:-0}
 pollinginterval=1
 
-echo "$(date): Starting emacs-mcp-server" >> "$logfile"
+echo "$(date): Starting $mcpserver" >> "$logfile"
 
 while read -r line; do
     echo "$(date): Sending request: ${line:0:100} ..." >> "$logfile"

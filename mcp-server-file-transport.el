@@ -37,6 +37,7 @@
     (cancel-timer (oref this -timeout-timer)))
   (with-temp-buffer
     (setq-local require-final-newline nil)
+    (set-buffer-file-coding-system 'utf-8)
     (insert result)
     (let ((save-silently t))
       (write-file (oref this -response-file) nil)))
@@ -44,6 +45,7 @@
 
 (cl-defmethod promising-future-schedule ((this file-promising-future) worker)
   (let* ((request (with-temp-buffer
+		    (set-buffer-file-coding-system 'utf-8)
 		    (insert-file-contents-literally (oref this -request-file))
 		    (string-trim-right (buffer-string)))))    
 
