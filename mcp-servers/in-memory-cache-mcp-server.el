@@ -39,7 +39,7 @@
     (:name "add-replace-cache-entry" :description "Add a new entry to the in-memory cache or replace an existing entry."
 	   :properties ((:name key :type "string" :required t :description "The key.")
 			(:name value :type "string" :required t :description "The value.")
-			(:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
 			     (puthash (gethash "key" arguments) (gethash "value" arguments) ht))
@@ -47,7 +47,7 @@
     
     (:name "get-cache-entry" :description "Get the entry from the in-memory cache."
 	   :properties ((:name key :type "string" :required t :description "The key.")			
-			(:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
 			     (mcp-server-write-tool-call-text-result
@@ -57,7 +57,7 @@
 			      cb-response))))
     
     (:name "get-keys" :description "Enumerate keys in the in-memory cache for the given partition."
-	   :properties ((:name partition :type "string" :required nil :description "The partition under which the key-value pair is stored. Default partition is used if unspecified."))
+	   :properties ((:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
 			     (mcp-server-write-tool-call-text-result
@@ -77,7 +77,7 @@
 
     (:name "stack-push" :description "Add a new entry on top of the stack."
 	   :properties ((:name value :type "string" :required t :description "The value.")
-			(:name partition :type "string" :required nil :description "The name of the stack. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))
 			     (plist-put hte :stack (cons (gethash "value" arguments) (plist-get hte :stack)))
@@ -89,7 +89,7 @@
 
     (:name "stack-peek" :description "Peek one or more entries from the top of the stack."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to peek. 1 if unspecified.")
-			(:name partition :type "string" :required nil :description "The name of the stack. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))			     
 			     (mcp-server-write-tool-call-text-result
@@ -99,7 +99,7 @@
 
     (:name "stack-pop" :description "Pop one or more entries from the top of the stack."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to pop. 1 if unspecified.")
-			(:name partition :type "string" :required nil :description "The name of the stack. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((count (or (gethash "count" arguments) 1))
 				  (hte (in-memory-cache-mcp-server-ensure-partition arguments))
@@ -112,7 +112,7 @@
 
     (:name "enqueue" :description "Add a new entry to queue."
 	   :properties ((:name value :type "string" :required t :description "The value.")
-			(:name partition :type "string" :required nil :description "The name of the queue. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))
 			     (plist-put hte :queue (append (plist-get hte :queue) (list (gethash "value" arguments)))))
@@ -123,7 +123,7 @@
 
     (:name "queue-peek" :description "Peek one or more entries at the head of the queue."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to peek. 1 if unspecified.")
-			(:name partition :type "string" :required nil :description "The name of the queue. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)			   
 			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))			     
 			     (mcp-server-write-tool-call-text-result
@@ -133,7 +133,7 @@
 
     (:name "dequeue" :description "Dequeue one or more entries from the queue."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to pop. 1 if unspecified.")
-			(:name partition :type "string" :required nil :description "The name of the queue. Default is used if unspecified."))
+			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((count (or (gethash "count" arguments) 1))
 				  (hte (in-memory-cache-mcp-server-ensure-partition arguments))
