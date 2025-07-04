@@ -44,9 +44,9 @@
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
 			     (puthash (gethash "key" arguments) (gethash "value" arguments) ht))
 			   (mcp-server-write-tool-call-text-result request "Success" cb-response)))
-    
+
     (:name "get-cache-entry" :description "Get the entry from the in-memory cache."
-	   :properties ((:name key :type "string" :required t :description "The key.")			
+	   :properties ((:name key :type "string" :required t :description "The key.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
@@ -55,7 +55,7 @@
 			      (or (gethash (gethash "key" arguments) ht)
 				  (error "Cache entry for the key '%s' not found" (gethash "key" arguments)))
 			      cb-response))))
-    
+
     (:name "get-keys" :description "Enumerate keys in the in-memory cache for the given partition."
 	   :properties ((:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
@@ -66,7 +66,7 @@
 			      cb-response))
 			   ))
 
-    (:name "get-partitions" :description "Enumerate partitions in the in-memory cache."
+    (:name "list-partitions" :description "Enumerate partitions in the in-memory cache."
 	   :properties ()
 	   :async-lambda (lambda (request arguments cb-response)
 			   (mcp-server-write-tool-call-text-result
@@ -74,6 +74,18 @@
 			    (json-encode (vconcat (hash-table-keys in-memory-cache-mcp-server-partitions)))
 			    cb-response)
 			   ))
+
+    (:name "drop-partitions" :description "Drop a partition from the in-memory cache."
+          :properties ((:name partition :type "string" :required nil :description "name of the partition to drop."))
+          :async-lambda (lambda (request arguments cb-response)
+                          (unless (gethash (gethash "partition" arguments) in-memory-cache-mcp-server-partitions)
+                            (error "Partition %s not found" (gethash "partition" arguments)))
+                          (remhash (gethash "partition" arguments) in-memory-cache-mcp-server-partitions)
+                          (mcp-server-write-tool-call-text-result
+                           request
+                           "Success"
+                           cb-response)
+                          ))
 
     (:name "stack-push" :description "Add a new entry on top of the stack."
 	   :properties ((:name value :type "string" :required t :description "The value.")
@@ -91,7 +103,7 @@
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to peek. 1 if unspecified.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
-			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))			     
+			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))
 			     (mcp-server-write-tool-call-text-result
 			      request
 			      (json-encode (vconcat (seq-take (plist-get hte :stack) (or (gethash "count" arguments) 1))))
@@ -124,8 +136,8 @@
     (:name "queue-peek" :description "Peek one or more entries at the head of the queue."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to peek. 1 if unspecified.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
-	   :async-lambda (lambda (request arguments cb-response)			   
-			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))			     
+	   :async-lambda (lambda (request arguments cb-response)
+			   (let* ((hte (in-memory-cache-mcp-server-ensure-partition arguments)))
 			     (mcp-server-write-tool-call-text-result
 			      request
 			      (json-encode (vconcat (seq-take (plist-get hte :queue) (or (gethash "count" arguments) 1))))
@@ -148,7 +160,7 @@
 	   :properties ((:name filepath :type "string" :required t :description "Target file."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ()
-			     (with-temp-buffer			       
+			     (with-temp-buffer
 			       (insert (json-encode in-memory-cache-mcp-server-partitions))
 			       (let ((save-silently t))
 				 (set-buffer-file-coding-system 'utf-8)
