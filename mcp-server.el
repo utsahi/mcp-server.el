@@ -169,10 +169,7 @@
 
 (cl-defgeneric mcp-server-process-prompts-get-request (obj request cb-response))
 (cl-defmethod mcp-server-process-prompts-get-request ((this mcp-server) request cb-response)
-  (mcp-server-write-json-line
-   cb-response
-   (mcp-server-compose-result request 'messages [])
-   ))
+  (error "prompts/get not implemented by %s" (type-of this)))
 
 (cl-defgeneric mcp-server-process-ping-request (obj request cb-response))
 (cl-defmethod mcp-server-process-ping-request ((this mcp-server) request cb-response)
