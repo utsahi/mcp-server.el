@@ -30,7 +30,7 @@
   (when (not (eq (oref this -state) 'initial))
     (error "Invalid state %s" (oref this -state)))
   (oset this -state 'dispatched)
-  (run-with-idle-timer
+  (run-with-timer
    0
    nil
    worker))

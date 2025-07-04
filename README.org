@@ -29,6 +29,7 @@ A library for implementing MCP servers in Emacs lisp.
 3. Sample implementation see [[file:mcp-servers/doctor-mcp-server.el]]
 
 *** Use with a file based transport
+(useful if you want to use REPL)
 1. Ensure that the directories containing the .el files below are in
    your load path.
 2. Load/require mcp-server-file-transport.el
@@ -38,6 +39,17 @@ A library for implementing MCP servers in Emacs lisp.
    - command = sh
    - first argument = full path to server.sh
    - second argument = *name-of-your-mcp-server-class*.
+
+*** Use with stdio based transport
+(avoid if using run-with-idle-timer, which doesn't seem to work in
+this mode)
+1) command line
+   - command = emacs
+   - first argument = --script
+   - second argument = mcp-server-headless-stdio-transport.el
+   - third argument = path-to-script-containing-your-mcp-server-class.el
+   - fourth argument = class-name-of-your-mcp-server
+   - fifth argument = optional timeout 
 
 *** Demo - Github Copilot visits Emacs Psychotherapist (doctor)
 [[./demos/llm-visits-the-doctor.gif]]
