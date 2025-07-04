@@ -30,7 +30,7 @@
       (let* ((parsed-request (json-parse-string request))
 	     (id (gethash "id" parsed-request))
 	     (method (gethash "method" parsed-request)))
-	(condition-case ex	
+	(condition-case ex
 	    (cond ((string-equal method "initialize")
 		   (mcp-server-process-initialize-request this parsed-request cb-response))
 		  ((string-equal method "notifications/initialized")
@@ -45,6 +45,8 @@
 		   (mcp-server-process-resources-templates-list-request this parsed-request cb-response))
 		  ((string-equal method "prompts/list")
 		   (mcp-server-process-prompts-list-request this parsed-request cb-response))
+                  ((string-equal method "prompts/get")
+                   (mcp-server-process-prompts-get-request this parsed-request cb-response))
 		  ((string-equal method "ping")
 		   (mcp-server-process-ping-request this parsed-request cb-response))
 		  ((string-equal method "logging/setLevel")
@@ -85,7 +87,7 @@
 	      (version . "1.0.0"))
 	     (instructions . "")))))
     (mcp-server-write-json-line
-     cb-response 
+     cb-response
      (json-encode default-initialize-response))))
 
 (cl-defgeneric mcp-server-on-notifications-initialized (obj request cb-response))
@@ -165,6 +167,13 @@
    (mcp-server-compose-result request 'prompts [])
    ))
 
+(cl-defgeneric mcp-server-process-prompts-get-request (obj request cb-response))
+(cl-defmethod mcp-server-process-prompts-get-request ((this mcp-server) request cb-response)
+  (mcp-server-write-json-line
+   cb-response
+   (mcp-server-compose-result request 'messages [])
+   ))
+
 (cl-defgeneric mcp-server-process-ping-request (obj request cb-response))
 (cl-defmethod mcp-server-process-ping-request ((this mcp-server) request cb-response)
   (message "Ping result: %s" (mcp-server-compose-result request nil nil))
@@ -190,7 +199,7 @@
   (json-encode
    `((jsonrpc . "2.0")
     (id . ,id)
-    (error . 
+    (error .
 	   ((code . -32603)
 	    (message . ,(format "%s" error)))))))
 
@@ -198,14 +207,14 @@
   (json-encode
       `((jsonrpc . "2.0")
 	(id . ,(gethash "id" request))
-	(result . 
+	(result .
 		,(if label (list (cons label value)) (make-hash-table))))))
 
 (defun mcp-server-compose-tool-call-error (id error)
   (json-encode
    `((jsonrpc . "2.0")
-     (id . ,id)     
-     (result . 
+     (id . ,id)
+     (result .
 	     ((isError . t)
 	      (content .
 		       [
@@ -216,15 +225,15 @@
 (defun mcp-server-compose-tool-call-text-result (request text)
   (json-encode
    `((jsonrpc . "2.0")
-     (id . ,(gethash "id" request))     
-     (result . 
+     (id . ,(gethash "id" request))
+     (result .
 	     ((content .
 		       [
 			((type . text)
 			 (text . ,text))
 			]))))))
 
-(defun mcp-server-write-tool-call-text-result (request text cb-response)  
+(defun mcp-server-write-tool-call-text-result (request text cb-response)
   (mcp-server-write-json-line
    cb-response
    (mcp-server-compose-tool-call-text-result request text)))
