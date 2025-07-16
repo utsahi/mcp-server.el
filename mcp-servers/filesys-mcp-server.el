@@ -25,6 +25,24 @@
 (defclass filesys-mcp-server (mcp-server)
   (()))
 
+(defun filesys-mcp-server-collect-process-output (command cb)
+  (let* ((buffer-name (generate-new-buffer-name "*process-output*"))
+         (buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (make-process
+       :name "process-collector"
+       :buffer buffer
+       :command command
+       :noquery t
+       :sentinel (lambda (proc event)
+                   (unless (process-live-p proc)
+                     (with-current-buffer buffer
+                       (let ((result (buffer-substring-no-properties 
+                                     (point-min) (point-max))))
+                         (funcall cb result)
+                         (kill-buffer buffer)))))))))
+
 (cl-defmethod mcp-server-enumerate-tools ((this filesys-mcp-server))
   '(
     (:name "read-file" :description "Reads the contents of the file as utf8 text."
@@ -62,7 +80,7 @@
                                                      (directory-files-and-attributes path t (gethash "match-regexp" arguments))
                                                      if (not (string-match-p "\\.?\\.$" (nth 0 e)))
                                                      collect (list :path (nth 0 e) :is-directory (nth 1 e)))))
-                              cb-response))))
+                              cb-response))))    
     )
   )
 
