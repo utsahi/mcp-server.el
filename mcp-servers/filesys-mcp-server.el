@@ -25,7 +25,33 @@
 (defclass filesys-mcp-server (mcp-server)
   (()))
 
-(defun filesys-mcp-server-collect-process-output (command cb)
+(defun filesys-mcp-server-collect-process-output (command cb &rest args)
+  "Execute a shell COMMAND asynchronously and collect its output into a temporary buffer.
+
+COMMAND is a list of strings representing the shell command and its arguments.
+
+CB is a callback function that gets invoked upon process completion. It receives the process EVENT
+and any additional arguments provided in ARGS.
+
+ARGS is a plist of additional arguments to pass to the callback function. Use the key `:args` in 
+ARGS to pass specific additional data to the callback function.
+
+CB can use `current-buffer` to access the command's output if needed.
+
+Example usage:
+(filesys-mcp-server-collect-process-output
+  (list \"ls\" \"-l\")
+  (lambda (event args)
+    (when (string= event \"finished\n\")
+      (let ((output (buffer-string))) ;; Read the output here
+        (message \"Process output: %s\" output)
+        (when args
+          (message \"Additional args: %s\" args)))))
+  :args '(\"some additional data\"))
+
+This executes the \"ls -l\" command asynchronously. The callback accesses and processes the command's
+output from the current buffer, and it can also make use of any additional arguments provided (e.g., 
+'(\"some additional data\'))."
   (let* ((buffer-name (generate-new-buffer-name "*process-output*"))
          (buffer (get-buffer-create buffer-name)))
     (with-current-buffer buffer
@@ -38,10 +64,8 @@
        :sentinel (lambda (proc event)
                    (unless (process-live-p proc)
                      (with-current-buffer buffer
-                       (let ((result (buffer-substring-no-properties 
-                                     (point-min) (point-max))))
-                         (funcall cb result)
-                         (kill-buffer buffer)))))))))
+                       (funcall cb event (plist-get args :args)))
+                     (kill-buffer buffer)))))))
 
 (cl-defmethod mcp-server-enumerate-tools ((this filesys-mcp-server))
   '(
