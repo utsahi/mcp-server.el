@@ -161,16 +161,27 @@
    (mcp-server-compose-result request 'resourceTemplates [])
    ))
 
+(cl-defgeneric mcp-server-enumerate-prompts (obj))
+(cl-defmethod mcp-server-enumerate-prompts ((this mcp-server) request cb-response))
+
 (cl-defgeneric mcp-server-process-prompts-list-request (obj request cb-response))
 (cl-defmethod mcp-server-process-prompts-list-request ((this mcp-server) request cb-response)
   (mcp-server-write-json-line
    cb-response
-   (mcp-server-compose-result request 'prompts [])
+   (mcp-server-compose-result request 'prompts (vconcat (mcp-server-enumerate-prompts this request cb-response)))
    ))
 
 (cl-defgeneric mcp-server-process-prompts-get-request (obj request cb-response))
 (cl-defmethod mcp-server-process-prompts-get-request ((this mcp-server) request cb-response)
-  (error "prompts/get not implemented by %s" (type-of this)))
+  (let* ((prompts (mcp-server-enumerate-prompts this request cb-response)))
+    (unless prompts
+      (error "prompts/get not implemented by %s" (type-of this)))
+    (let* ((params (or (gethash "params" request) (error "params not found in the request.")))
+           (name (or (gethash "name" params) (error "name not found in the request.")))
+           (arguments (or (gethash "arguments" params) (error "arguments not found in the request.")))
+           (prompt (or (seq-find (lambda (p) (string-equal (plist-get p :name) name)) prompts) (error "%s not implemented" name)))
+           (impl (or (plist-get prompt :async-lambda) (error "%s lambda not implemented" name))))
+      (funcall impl request arguments cb-response))))
 
 (cl-defgeneric mcp-server-process-ping-request (obj request cb-response))
 (cl-defmethod mcp-server-process-ping-request ((this mcp-server) request cb-response)
@@ -235,5 +246,16 @@
   (mcp-server-write-json-line
    cb-response
    (mcp-server-compose-tool-call-text-result request text)))
+
+(defun mcp-server-prompt-write-user-message (request cb-response message)
+  (mcp-server-write-json-line
+   cb-response
+   (mcp-server-compose-result
+    request
+    'messages
+    `[((role . user)
+       (content . ((type . text)
+		   (text . ,message))))])
+   ))
 
 (provide 'mcp-server)
