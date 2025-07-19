@@ -114,9 +114,10 @@
 	    (mapcar (lambda (tl)
 		      (let* ((properties
 			      (mapcar (lambda (p)
-					(list (required-pr p :name)
-					      `(type . ,(required-pr p :type))
-					      `(description . ,(or (optional-pr p :description) ""))))
+					(append (list (required-pr p :name)
+                                                      `(type . ,(required-pr p :type))
+		                                      `(description . ,(or (optional-pr p :description) "")))
+                                                (if (string-equal "array" (required-pr p :type)) `((items ,(required-pr p :items))))))
 				      (optional-pr tl :properties)))
 			     (required
 			      (cl-loop for p in (optional-pr tl :properties)

@@ -13,59 +13,17 @@
 
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 (require 'eieio)
 (require 'mcp-server)
 
 (defclass filesys-mcp-server (mcp-server)
   (()))
-
-(defun filesys-mcp-server-collect-process-output (command cb &rest args)
-  "Execute a shell COMMAND asynchronously and collect its output into a temporary buffer.
-
-COMMAND is a list of strings representing the shell command and its arguments.
-
-CB is a callback function that gets invoked upon process completion. It receives the process EVENT
-and any additional arguments provided in ARGS.
-
-ARGS is a plist of additional arguments to pass to the callback function. Use the key `:args` in 
-ARGS to pass specific additional data to the callback function.
-
-CB can use `current-buffer` to access the command's output if needed.
-
-Example usage:
-(filesys-mcp-server-collect-process-output
-  (list \"ls\" \"-l\")
-  (lambda (event args)
-    (when (string= event \"finished\n\")
-      (let ((output (buffer-string))) ;; Read the output here
-        (message \"Process output: %s\" output)
-        (when args
-          (message \"Additional args: %s\" args)))))
-  :args '(\"some additional data\"))
-
-This executes the \"ls -l\" command asynchronously. The callback accesses and processes the command's
-output from the current buffer, and it can also make use of any additional arguments provided (e.g., 
-'(\"some additional data\'))."
-  (let* ((buffer-name (generate-new-buffer-name "*process-output*"))
-         (buffer (get-buffer-create buffer-name)))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (make-process
-       :name "process-collector"
-       :buffer buffer
-       :command command
-       :noquery t
-       :sentinel (lambda (proc event)
-                   (unless (process-live-p proc)
-                     (with-current-buffer buffer
-                       (funcall cb event (plist-get args :args)))
-                     (kill-buffer buffer)))))))
 
 (cl-defmethod mcp-server-enumerate-tools ((this filesys-mcp-server))
   '(
@@ -77,14 +35,14 @@ output from the current buffer, and it can also make use of any additional argum
                                   (path (if (file-exists-p fp-arg) fp-arg
                                           (file-name-concat (gethash "project-root" arguments) (gethash "file-path" arguments)))))
                              (unless (file-exists-p path)
-                               (error "path not found %s" path))                             
+                               (error "path not found %s" path)) 
 			     (mcp-server-write-tool-call-text-result
                               request
                               (with-temp-buffer
-                               (insert-file-contents-literally path)
-                               (decode-coding-region (point-min) (point-max) 'utf-8)
-                               (buffer-string))
-                              cb-response))))
+                                (insert-file-contents-literally path)
+                                (decode-coding-region (point-min) (point-max) 'utf-8)
+                                (buffer-string))
+                              cb-response)))) 
     (:name "directory-files" :description "Reads the contents of the specified directory."
 	   :properties ((:name directory-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
 			(:name project-root :type "string" :required nil :description "Project root, required if the directory path is relative.")
@@ -96,7 +54,7 @@ output from the current buffer, and it can also make use of any additional argum
                                            (gethash "project-root" arguments)
                                            (gethash "directory-path" arguments)))))
                              (unless (file-directory-p path)
-                               (error "Path not found or not a directory %s" path))                             
+                               (error "Path not found or not a directory %s" path)) 
 			     (mcp-server-write-tool-call-text-result
                               request
                               (json-encode (vconcat
@@ -104,7 +62,7 @@ output from the current buffer, and it can also make use of any additional argum
                                                      (directory-files-and-attributes path t (gethash "match-regexp" arguments))
                                                      if (not (string-match-p "\\.?\\.$" (nth 0 e)))
                                                      collect (list :path (nth 0 e) :is-directory (nth 1 e)))))
-                              cb-response))))    
+                              cb-response)))) 
     )
   )
 
