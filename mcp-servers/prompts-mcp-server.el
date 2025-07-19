@@ -4,7 +4,7 @@
 ;; Author: Kishor Datar <kishordatar at gmail>
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "30.0"))
-;; Keywords: mcp, server, llm, doctor ;
+;; Keywords: mcp, server, llm ;
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by

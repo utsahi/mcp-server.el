@@ -117,7 +117,9 @@
 					(append (list (required-pr p :name)
                                                       `(type . ,(required-pr p :type))
 		                                      `(description . ,(or (optional-pr p :description) "")))
-                                                (if (string-equal "array" (required-pr p :type)) `((items ,(required-pr p :items))))))
+                                                (if (string-equal "array" (required-pr p :type)) `((items ,(required-pr p :items))))
+                                                (if (optional-pr p :enum) `(
+                                                                            (enum . ,(required-pr p :enum))))))
 				      (optional-pr tl :properties)))
 			     (required
 			      (cl-loop for p in (optional-pr tl :properties)

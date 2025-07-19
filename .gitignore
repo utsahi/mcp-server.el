@@ -1,1 +1,12 @@
+# .gitignore
+
 mcp-server.el-logs/
+
+# Ignore Emacs backup files
+*~
+\#*\#
+.\#*
+
+# Ignore merge conflict files
+*.orig
+*.rej
