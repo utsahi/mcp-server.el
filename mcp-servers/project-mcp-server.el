@@ -37,7 +37,10 @@
    "reflog"
    "describe"
    "blame"
-   "ls-files"])
+   "ls-files"
+   "merge-tree"
+   "merge-base"
+   "branch"])
 
 (defun project-mcp-server-set-window-project-timer-fn ()
   (setq project-mcp-server-last-buffer-project
