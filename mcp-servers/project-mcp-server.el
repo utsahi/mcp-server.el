@@ -24,6 +24,7 @@
 (require 'filesys-mcp-server)
 (require 'project)
 
+(defconst project-mcp-server-max-file-length 24000)
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -345,31 +346,61 @@ output from the current buffer, and it can also make use of any additional argum
             (if (= 1 (length matching-files))
                 (nth 0 matching-files)))))))
 
-(defun project-mcp-server-read-files (request arguments cb-response)			 
-  (let* ((directory (gethash "project-root" arguments))
-         (paths (gethash "file-paths" arguments)))
-    (cl-flet ((content-or-error
-                (lambda (file)
-                  (let* ((effective-path (project-mcp-server-match-case-insensitively directory file)))
-                    (if effective-path
-                        (with-temp-buffer
-                          (project-mcp-server-validate-path effective-path)
-                          (insert-file-contents-literally effective-path)
-                          (decode-coding-region (point-min) (point-max) 'utf-8)
-                          `(:matched-file ,effective-path
-                            :input-file ,file
-                            :content ,(buffer-string)))
-                      `(:file ,file
-                        :error ,(format "Path not found %s. Under directory %s. If using a relative
+(defun project-mcp-server-read-file-lines-or-error (directory file range)
+  (if (and range (> (car range) (cdr range)))
+      (error "Invalid range %d:%d."
+             (car range)
+             (cdr range)))
+  (let* ((effective-path (project-mcp-server-match-case-insensitively directory file)))
+    (if effective-path
+        (with-temp-buffer
+          (project-mcp-server-validate-path effective-path)
+          (insert-file-contents-literally effective-path)
+          (decode-coding-region (point-min) (point-max) 'utf-8)
+          (let* ((full (buffer-string))            
+                 (content))
+            (if (not range)
+                (setq content full)
+              (let* ((all-lines (string-split full "\n"))
+                     (some-lines
+                      (seq-take (seq-drop all-lines (- (car range) 1))
+                                (- (cdr range) (car range) -1))))               
+               (setq content (string-join some-lines "\n"))))
+            (if (> (length content) project-mcp-server-max-file-length)
+                `(:file ,file
+                        :error ,(format "File %s too large. Length %d. Line count %d. Optimize the read by reading specific
+ranges of lines."
+                                        file
+                                        (length content)
+                                        (length (string-split content "\n"))))
+              `(:matched-file ,effective-path
+                              :input-file ,file
+                              :content ,content))))
+      `(:file ,file
+              :error ,(format "Path not found %s. Under directory %s. If using a relative
 path, make sure it is constructed correctly relative to the directory
 path.  The match may be case sensitive. Try to find the actual casing of
 the file or directory names."
-                                              file
-                                              directory)))))))
-      (mcp-server-write-tool-call-text-result
-       request
-       (json-encode (vconcat (mapcar (lambda (p) (content-or-error p)) paths)))
-       cb-response))))
+                              file
+                              directory)))))
+
+(defun project-mcp-server-read-files (request arguments cb-response)			 
+  (let* ((directory (gethash "project-root" arguments))
+         (paths (gethash "file-paths" arguments)))
+    (mcp-server-write-tool-call-text-result
+     request
+     (json-encode (vconcat (mapcar (lambda (p) (project-mcp-server-read-file-lines-or-error directory p nil)) paths)))
+     cb-response)))
+
+(defun project-mcp-server-read-file-lines (request arguments cb-response)			 
+  (let* ((directory (gethash "project-root" arguments))
+         (path (gethash "file-path" arguments))
+         (line-range-start (gethash "line-range-start" arguments))
+         (line-range-end (gethash "line-range-end" arguments)))
+    (mcp-server-write-tool-call-text-result
+     request
+     (json-encode (project-mcp-server-read-file-lines-or-error directory path (cons line-range-start line-range-end)))
+     cb-response)))
 
 (defun project-mcp-server-write-file-content (request arguments cb-response)
   (let* ((fp-arg (gethash "file-path" arguments))
@@ -419,6 +450,13 @@ From now on, you will use the above project path.
 	   :properties ((:name file-paths :type "array" :required t :description "File paths." :items (:type . "string")) 
 			(:name project-root :type "string" :required t :description "Project root."))
 	   :async-lambda project-mcp-server-read-files)
+
+    (:name "project-mcp-server-read-file-lines" :description "Reads the range of lines from the file as utf8 text."
+	   :properties ((:name file-path :type "string" :required t :description "File path.") 
+			(:name project-root :type "string" :required t :description "Project root.")
+                        (:name line-range-start :type "number" :required t :description "Line range start")
+                        (:name line-range-end :type "number" :required t :description "Line range end"))
+	   :async-lambda project-mcp-server-read-file-lines)
 
     (:name "write-file-content" :description "Overwrites the contents of the file."
 	   :properties ((:name project-root :type "string" :required t :description "Last active project.")
