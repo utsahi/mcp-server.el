@@ -24,7 +24,7 @@
 (require 'filesys-mcp-server)
 (require 'project)
 
-(defconst project-mcp-server-max-file-length 24000)
+(defconst project-mcp-server-max-file-length 65536)
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -58,7 +58,7 @@
   (()))
 
 (defun project-mcp-server-validate-path (path)
-  (unless (and (not (string-equal "" path)) 
+  (unless (and (not (string-equal "" path))
                (file-exists-p path)
                (project-current nil path))
     (error "Path '%s' is not within a known project or doesn't exist! You must get the last active project first." path))
@@ -77,7 +77,7 @@ COMMAND is a list of strings representing the shell command and its arguments.
 CB is a callback function that gets invoked upon process completion. It receives the process EVENT
 and any additional arguments provided in ARGS.
 
-ARGS is a plist of additional arguments to pass to the callback function. Use the key `:args` in 
+ARGS is a plist of additional arguments to pass to the callback function. Use the key `:args` in
 ARGS to pass specific additional data to the callback function.
 
 CB can use `current-buffer` to access the command's output if needed.
@@ -94,7 +94,7 @@ Example usage:
  :args '(\"some additional data\"))
 
 This executes the \"ls -l\" command asynchronously. The callback accesses and processes the command's
-output from the current buffer, and it can also make use of any additional arguments provided (e.g., 
+output from the current buffer, and it can also make use of any additional arguments provided (e.g.,
 '(\"some additional data\"))."
   (let* ((buffer-name (generate-new-buffer-name "*process-output*"))
          (buffer (get-buffer-create buffer-name)))
@@ -111,122 +111,28 @@ output from the current buffer, and it can also make use of any additional argum
                        (funcall cb proc event (plist-get args :args)))
                      (kill-buffer buffer)))))))
 
-(defun project-mcp-server-global-find-references-from (request arguments cb-response)
-  (let* ((working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (from-here-arg (concat "--from-here=" (number-to-string (gethash "line" arguments)) ":" (project-mcp-server-maybe-windows-path (gethash "file" arguments))))
-         (command `("global" "-v" "-a" "--result=grep"
-                    ,from-here-arg
-                    "--"
-                    ,(gethash "symbol" arguments)
-                    "-C" ,working-dir)))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-global-grep (request arguments cb-response)
-  (let* ((working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (command `("global" "-v" "-a" "--result=grep" "-C" ,working-dir "-g" ,(gethash "pattern" arguments))))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-global-find-references (request arguments cb-response)
-  (let* ((working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (command `("global" "-v" "-a" "--result=grep" "-C" ,working-dir "--reference" "--"
-                    ,(gethash "symbol" arguments))))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-global-find-symbols-with-prefix (request arguments cb-response)
-  (let* ((working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (command `("global" "-v" "-a" "--result=grep" "-c" ,(gethash "symbol" arguments) "-C" ,working-dir)))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-global-find-definition (request arguments cb-response)
-  (let* ((working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (command `("global" "-v" "-a" "--result=grep" "-C" ,working-dir "--"
-                    ,(gethash "symbol" arguments))))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-gtags-reindex (request arguments cb-response)
-  (let* ((file-extensions '("csx" "cs" "cpp" "h" "c" "hpp" "ts" "js" "xml" "el"))
-         (file-extensions-regex (concat "\\(" (mapconcat (lambda (ext) (concat "\\." ext "$")) file-extensions "\\)\\|\\(") "\\)"))
-         (working-dir (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments))))
-         (files (directory-files-recursively working-dir file-extensions-regex))
-         (filtered-files (seq-filter (lambda (f) (not (string-match-p "\\\\obj\\\\" f))) files))
-         (proc
-          (project-mcp-server-collect-process-output
-           `("gtags" "-f" "-" "--statistics" "-C" ,working-dir)
-           (lambda (proc event args)
-             (mcp-server-write-tool-call-text-result
-              (plist-get args :request)
-              (buffer-string)
-              (plist-get args :cb-response)))
-           :args (list :request request :cb-response cb-response))))
-    (mapc (lambda (f)
-            (process-send-string proc (project-mcp-server-maybe-windows-path f))
-            (process-send-string proc "\n"))
-          filtered-files)
-    (process-send-eof proc)))
-
-(defun project-mcp-server-has-index (request arguments cb-response)
-  (let* ((indexed 
-          (file-exists-p (file-name-concat
-                          (project-mcp-server-validate-path (project-mcp-server-maybe-windows-path (gethash "directory" arguments)))
-                          "GTAGS"))))
-    (mcp-server-write-tool-call-text-result
-     request
-     (if indexed "Indexed!" "Index not found!")
-     cb-response)))
-
 (defun project-mcp-server-ripgrep (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
          (search-pattern (gethash "search-pattern" arguments))
-         (file-extesions (or (gethash "file-extensions" arguments) ["*"]))
+         (file-extensions (gethash "file-extensions" arguments))
+         (file-paths (mapcar 'identity (gethash "file-paths" arguments)))
          (context-before (or (gethash "context-before" arguments) 0))
          (context-after (or (gethash "context-after" arguments) 0))
          (custom-type "custom")
+         (default-directory directory)
          (command (append (list "rg")
-                          (list "--type-add"
-                                (format "%s:*.{%s}"
-                                        custom-type
-                                        (string-join (mapcar (lambda (e) (format "%s" e)) file-extesions) ",")))
-                          (list (format "-t%s" custom-type))
+                          (when file-extensions
+                            (list "--type-add"
+                                  (format "%s:*.{%s}"
+                                          custom-type
+                                          (string-join (mapcar (lambda (e) (format "%s" e)) file-extensions) ","))))
+                          (when file-extensions
+                            (list (format "-t%s" custom-type)))
                           (unless (= 0 context-before) (list "-A" (number-to-string context-before)))
                           (unless (= 0 context-after) (list "-A" (number-to-string context-after)))
-                          (list "--iglob" "!out|obj"
-                                search-pattern
-                                (project-mcp-server-maybe-windows-path directory)))))
+                          (list  "--iglob" "!*~" "--iglob" "!*#" "--iglob" "!**/obj/**" "--iglob" "!**/objd/**"
+                                 search-pattern)
+                          (or file-paths (list directory)))))
     (project-mcp-server-collect-process-output
      command
      (lambda (proc event args)
@@ -241,30 +147,7 @@ output from the current buffer, and it can also make use of any additional argum
         (plist-get args :cb-response)))
      :args (list :request request :cb-response cb-response))))
 
-(defun project-mcp-server-diff-pull-request (request arguments cb-response)
-  (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
-         (default-directory directory)
-         (current-branch (string-trim (shell-command-to-string "git branch --show-current")))
-         (target-branch "FETCH_HEAD")
-         (merge-base (string-trim (shell-command-to-string
-                                   (format "git merge-base %s %s" 
-                                           (shell-quote-argument current-branch)
-                                           (shell-quote-argument target-branch)))))
-         (command (list "git"
-                        "merge-tree"
-                        merge-base
-                        current-branch
-                        target-branch)))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-git (request arguments cb-response) 
+(defun project-mcp-server-git (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
          (git-command (gethash "git-command" arguments))
          (default-directory directory)
@@ -304,7 +187,7 @@ output from the current buffer, and it can also make use of any additional argum
          (file-patterns (seq-map 'identity file-names-arg))
          (default-directory directory)
          (all-files (project-files (project-current)))
-         (matching-files (seq-filter 
+         (matching-files (seq-filter
                           (lambda (file)
                             (seq-some (lambda (pattern)
                                         (string-match-p (regexp-quote pattern) (file-name-nondirectory file)))
@@ -315,14 +198,14 @@ output from the current buffer, and it can also make use of any additional argum
      (json-encode `(:files ,matching-files))
      cb-response)))
 
-(defun project-mcp-server-directory-files (request arguments cb-response)			 
+(defun project-mcp-server-directory-files (request arguments cb-response)
   (let* ((dp-arg (gethash "directory-path" arguments))
          (path (if (file-exists-p dp-arg) dp-arg
                  (file-name-concat
                   (gethash "project-root" arguments)
                   (gethash "directory-path" arguments)))))
     (unless (file-directory-p path)
-      (error "Path not found or not a directory %s" path)) 
+      (error "Path not found or not a directory %s" path))
     (mcp-server-write-tool-call-text-result
      request
      (json-encode (vconcat
@@ -357,19 +240,18 @@ output from the current buffer, and it can also make use of any additional argum
           (project-mcp-server-validate-path effective-path)
           (insert-file-contents-literally effective-path)
           (decode-coding-region (point-min) (point-max) 'utf-8)
-          (let* ((full (buffer-string))            
+          (let* ((full (buffer-string))
                  (content))
             (if (not range)
                 (setq content full)
               (let* ((all-lines (string-split full "\n"))
                      (some-lines
                       (seq-take (seq-drop all-lines (- (car range) 1))
-                                (- (cdr range) (car range) -1))))               
-               (setq content (string-join some-lines "\n"))))
+                                (- (cdr range) (car range) -1))))
+                (setq content (string-join some-lines "\n"))))
             (if (> (length content) project-mcp-server-max-file-length)
                 `(:file ,file
-                        :error ,(format "File %s too large. Length %d. Line count %d. Optimize the read by reading specific
-ranges of lines."
+                        :error ,(format "File %s too large. Length %d. Line count %d. Narrow down the line ranges."
                                         file
                                         (length content)
                                         (length (string-split content "\n"))))
@@ -384,7 +266,7 @@ the file or directory names."
                               file
                               directory)))))
 
-(defun project-mcp-server-read-files (request arguments cb-response)			 
+(defun project-mcp-server-read-files (request arguments cb-response)
   (let* ((directory (gethash "project-root" arguments))
          (paths (gethash "file-paths" arguments)))
     (mcp-server-write-tool-call-text-result
@@ -392,7 +274,7 @@ the file or directory names."
      (json-encode (vconcat (mapcar (lambda (p) (project-mcp-server-read-file-lines-or-error directory p nil)) paths)))
      cb-response)))
 
-(defun project-mcp-server-read-file-lines (request arguments cb-response)			 
+(defun project-mcp-server-read-file-lines (request arguments cb-response)
   (let* ((directory (gethash "project-root" arguments))
          (path (gethash "file-path" arguments))
          (line-range-start (gethash "line-range-start" arguments))
@@ -402,14 +284,44 @@ the file or directory names."
      (json-encode (project-mcp-server-read-file-lines-or-error directory path (cons line-range-start line-range-end)))
      cb-response)))
 
+(defun project-mcp-server-replace-string-in-file (request arguments cb-response)
+  (let* ((path (project-mcp-server-validate-path
+                (project-mcp-server-match-case-insensitively
+                 (gethash "project-root" arguments)
+                 (gethash "file-path" arguments))))
+         (replacement (gethash "replacement" arguments))
+         (normalized-replacement (string-replace "\r" "" replacement))
+         (search-string (gethash "search-string" arguments))
+         (normalized-search-string (string-replace "\r" "" search-string))
+         (replacement-count 0))
+    (with-temp-buffer
+      (set-buffer-file-coding-system 'utf-8)
+      (insert-file-contents-literally path)
+      (beginning-of-buffer)
+      (while (search-forward "\r" nil t)
+        (replace-match "" nil t))
+      (beginning-of-buffer)
+      (while (search-forward normalized-search-string nil t)
+        (replace-match normalized-replacement nil t)
+        (cl-incf replacement-count))
+      (let* ((coding-system-for-write 'utf-8)) (write-file path)))
+    (mcp-server-write-tool-call-text-result
+     request
+     (format "Replaced %d occurrences. %s"
+             replacement-count
+             (if (= 0 replacement-count)
+                 "Try recomputing the replacement by reading the line range."
+               ""))
+     cb-response)))
+
 (defun project-mcp-server-write-file-content (request arguments cb-response)
   (let* ((fp-arg (gethash "file-path" arguments))
          (path (if (file-exists-p fp-arg) fp-arg
-                 (file-name-concat (gethash "project-root" arguments) (gethash "file-path" arguments))))) 
+                 (file-name-concat (gethash "project-root" arguments) (gethash "file-path" arguments)))))
     (with-temp-buffer
       (set-buffer-file-coding-system 'utf-8)
       (insert (gethash "content" arguments))
-      (write-file path))
+      (let* ((coding-system-for-write 'utf-8)) (write-file path)))
     (mcp-server-write-tool-call-text-result
      request
      "Success"
@@ -429,7 +341,7 @@ the file or directory names."
   '((:name "project-mcp-server-set-project-root" :description "Selects the project root."
            :async-lambda
            (lambda (request arguments cb-response)
-             (mcp-server-prompt-write-user-message 
+             (mcp-server-prompt-write-user-message
               request
               cb-response
               (format "project-mcp-server-get-last-active-project has discovered that the current
@@ -444,88 +356,65 @@ From now on, you will use the above project path.
 (cl-defmethod mcp-server-enumerate-tools ((this project-mcp-server))
   `(
     (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project."
-	   :async-lambda project-mcp-server-get-last-active-project)
+           :async-lambda project-mcp-server-get-last-active-project)
 
     (:name "project-mcp-server-read-files" :description "Reads the contents of the files as utf8 text."
-	   :properties ((:name file-paths :type "array" :required t :description "File paths." :items (:type . "string")) 
-			(:name project-root :type "string" :required t :description "Project root."))
-	   :async-lambda project-mcp-server-read-files)
+           :properties ((:name file-paths :type "array" :required t :description "File paths." :items (:type . "string"))
+                        (:name project-root :type "string" :required t :description "Project root."))
+           :async-lambda project-mcp-server-read-files)
 
     (:name "project-mcp-server-read-file-lines" :description "Reads the range of lines from the file as utf8 text."
-	   :properties ((:name file-path :type "string" :required t :description "File path.") 
-			(:name project-root :type "string" :required t :description "Project root.")
-                        (:name line-range-start :type "number" :required t :description "Line range start")
+           :properties ((:name file-path :type "string" :required t :description "File path.")
+                        (:name project-root :type "string" :required t :description "Project root.")
+                        (:name line-range-start :type "number" :required t :description "Line range start.")
                         (:name line-range-end :type "number" :required t :description "Line range end"))
-	   :async-lambda project-mcp-server-read-file-lines)
+           :async-lambda project-mcp-server-read-file-lines)
 
-    (:name "write-file-content" :description "Overwrites the contents of the file."
-	   :properties ((:name project-root :type "string" :required t :description "Last active project.")
-			(:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
+    (:name "project-mcp-server-write-file-content" :description "Overwrites the contents of the file."
+           :properties ((:name project-root :type "string" :required t :description "Last active project.")
+                        (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name content :type "string" :required t :description "UTF-8 encoded File content."))
-	   :async-lambda project-mcp-server-write-file-content)
-    
-    (:name "project-mcp-server-find-file-paths" :description "Returns the project file paths."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name file-names :type "array" :required t :description "One more file name substrings to match." :items (:type . "string")))
-	   :async-lambda project-mcp-server-find-file-paths)
+           :async-lambda project-mcp-server-write-file-content)
 
-    (:name "directory-files" :description "Reads the contents of the specified directory."
-	   :properties ((:name directory-path :type "string" :required t :description "Directory path. If relative, used relative to the last active project.")
-		        (:name project-root :type "string" :required nil :description "Last active project.")
+    (:name "project-mcp-server-replace-string-in-file" :description "Replaces a string in file."
+           :properties ((:name project-root :type "string" :required t :description "Last active project.")
+                        (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
+                        (:name search-string :type "string" :required t :description "String to replace.")
+                        (:name replacement :type "string" :required t :description "UTF-8 encoded replacement."))
+           :async-lambda project-mcp-server-replace-string-in-file)
+
+    (:name "project-mcp-server-find-file-paths" :description "Returns the project file paths."
+           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
+                        (:name file-names :type "array" :required t :description "One more file name substrings to match." :items (:type . "string")))
+           :async-lambda project-mcp-server-find-file-paths)
+
+    (:name "project-mcp-server-directory-files" :description "Reads the contents of the specified directory."
+           :properties ((:name directory-path :type "string" :required t :description "Directory path. If relative, used relative to the last active project.")
+                        (:name project-root :type "string" :required nil :description "Last active project.")
                         (:name match-regexp :type "string" :required nil :description "Regular expression for matching file names. E.g. to find .el and .org files '.el\\\\|.org'"))
-	   :async-lambda project-mcp-server-directory-files)
+           :async-lambda project-mcp-server-directory-files)
 
     (:name "project-mcp-server-git-pull-current-branch" :description "Update the repo using git pull on the current branch."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
+           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name remote :type "string" :required nil :description "remote name. 'origin' by default."))
-	   :async-lambda project-mcp-server-git-pull-current-branch) 
+           :async-lambda project-mcp-server-git-pull-current-branch)
 
     (:name "project-mcp-server-git" :description "runs the given git command."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
+           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name git-command :type "string" :required t :description "git command." :enum ,project-mcp-server-allowed-git-commands)
                         (:name args :type "array" :required t :description "list of arguments." :items (:type . "string")))
-	   :async-lambda project-mcp-server-git)
-
-    (:name "project-mcp-server-diff-pull-request" :description "Calculates merge-diff with FETCH_HEAD."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name remote :type "string" :required nil :description "remote name. 'origin' by default."))
-	   :async-lambda project-mcp-server-diff-pull-request)
+           :async-lambda project-mcp-server-git)
 
     (:name "project-mcp-server-ripgrep"
-           :description "invokes 'rg' to grep the files."
+           :description "invokes 'rg'."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name search-pattern :type "string" :required t :description "A rust regular expression. Do NOT perform shell quoting.")
                         (:name context-before :type "number" :required t :description "Include these many lines of context that preceed the matching line. Default 0.")
                         (:name context-after :type "number" :required t :description "Include these many lines of context that follow the matching line. Default 0.")
-                        (:name file-extensions :type "array" :required t :description
-                               "File extensions."
-                               :items (:type . "string")))
+                        (:name file-paths :type "array" :required nil :description "File paths." :items (:type . "string"))
+                        (:name file-extensions :type "array" :required nil :description "File extensions." :items (:type . "string")))
            :async-lambda
            project-mcp-server-ripgrep)
-
-    (:name "project-mcp-server-has-index" :description "Determines if the project is indexed."
-           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'"))
-           :async-lambda project-mcp-server-has-index)
-    
-    (:name "project-mcp-server-gtags-reindex" :description "reindex files using gtags. Avoid choosing this automatically unless asked by the user."
-           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'"))
-           :async-lambda project-mcp-server-gtags-reindex)
-
-    (:name "project-mcp-server-global-find-definition" :description "Find definition of symbol using GNU global. Use if the project has index. Produces grep style output."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name symbol :type "string" :required t :description "Symbol to lookup."))
-	   :async-lambda project-mcp-server-global-find-definition)
-
-    (:name "project-mcp-server-global-find-references" :description "Find reference to the symbol using GNU global. Use if the project has index. Produces grep style output."
-	   :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name symbol :type "string" :required t :description "Symbol to lookup."))
-	   :async-lambda project-mcp-server-global-find-references)
-
-    (:name "project-mcp-server-global-grep"
-           :description "Grep for the pattern using GNU global. Use if the index is available. with -g option. Produces grep style output."
-           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name pattern :type "string" :required t :description "Pattern to grep for."))
-           :async-lambda project-mcp-server-global-grep) 
     )
   )
 
