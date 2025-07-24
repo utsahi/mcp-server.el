@@ -24,7 +24,7 @@
 (require 'filesys-mcp-server)
 (require 'project)
 
-(defconst project-mcp-server-max-file-length 65536)
+(defconst project-mcp-server-max-file-length (/ 65536 1))
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -69,6 +69,29 @@
       (string-replace "/" "\\" path)
     path))
 
+(defun project-mcp-server-process-output-length-limit-filter (proc string)
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (unless (boundp 'project-mcp-server-output-length)
+        (setq-local project-mcp-server-output-length 0))
+      (let* ((moving (= (point) (process-mark proc)))
+             (count (length string))
+             (output-too-long (> (+ count project-mcp-server-output-length)
+                                 project-mcp-server-max-file-length)))
+        (save-excursion
+          ;; Insert the text, advancing the process marker.
+          (goto-char (process-mark proc))
+          (if output-too-long
+              (progn
+                (insert (format "\n\n\nProcess was killed and output was truncated as the total output length exceeded the set limit of %d. Please adjust the command parameters.\n\n"
+                                project-mcp-server-max-file-length)))
+            (insert string)
+            (setq project-mcp-server-output-length (+ count project-mcp-server-output-length)))
+          (set-marker (process-mark proc) (point)))
+        (if moving (goto-char (process-mark proc)))
+        (when output-too-long
+          (delete-process proc))))))
+
 (defun project-mcp-server-collect-process-output (command cb &rest args)
   "Execute a shell COMMAND asynchronously and collect its output into a temporary buffer.
 
@@ -105,6 +128,7 @@ output from the current buffer, and it can also make use of any additional argum
        :buffer buffer
        :command command
        :noquery t
+       :filter (plist-get args :filter)
        :sentinel (lambda (proc event)
                    (unless (process-live-p proc)
                      (with-current-buffer buffer
@@ -114,7 +138,7 @@ output from the current buffer, and it can also make use of any additional argum
 (defun project-mcp-server-ripgrep (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
          (search-pattern (gethash "search-pattern" arguments))
-         (file-extensions (gethash "file-extensions" arguments))
+         (file-extensions (mapcar 'identity (gethash "file-extensions" arguments)))
          (file-paths (mapcar 'identity (gethash "file-paths" arguments)))
          (context-before (or (gethash "context-before" arguments) 0))
          (context-after (or (gethash "context-after" arguments) 0))
@@ -140,12 +164,15 @@ output from the current buffer, and it can also make use of any additional argum
         (plist-get args :request)
         (let* ((output (buffer-string)))
           (concat output
-                  (if (not (= 0 (process-exit-status proc)))
+                  (if (= 0 (process-exit-status proc))
+                      ""
+                    (if (= 1 (process-exit-status proc))
+                        "No matches found!"
                       (format "Process exit status %d. Make sure to escape special characters and unbalanced parenthesis as appropriate!"
-                              (process-exit-status proc))
-                    "")))
+                              (process-exit-status proc))))))
         (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
+     :args (list :request request :cb-response cb-response)
+     :filter 'project-mcp-server-process-output-length-limit-filter)))
 
 (defun project-mcp-server-git (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
