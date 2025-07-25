@@ -21,7 +21,6 @@
 
 (require 'eieio)
 (require 'mcp-server)
-(require 'filesys-mcp-server)
 (require 'project)
 
 (defconst project-mcp-server-max-file-length (/ 65536 1))
