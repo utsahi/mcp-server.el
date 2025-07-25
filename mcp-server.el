@@ -244,6 +244,11 @@
 			 (text . ,text))
 			]))))))
 
+(defun mcp-server-write-tool-call-error-result (request text cb-response)
+  (mcp-server-write-json-line
+   cb-response
+   (mcp-server-compose-tool-call-error (gethash "id" request) text)))
+
 (defun mcp-server-write-tool-call-text-result (request text cb-response)
   (mcp-server-write-json-line
    cb-response

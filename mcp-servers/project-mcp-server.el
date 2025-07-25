@@ -83,6 +83,7 @@
           (goto-char (process-mark proc))
           (if output-too-long
               (progn
+                (erase-buffer)
                 (insert (format "\n\n\nProcess was killed and output was truncated as the total output length exceeded the set limit of %d. Please adjust the command parameters.\n\n"
                                 project-mcp-server-max-file-length)))
             (insert string)
@@ -160,17 +161,23 @@ output from the current buffer, and it can also make use of any additional argum
     (project-mcp-server-collect-process-output
      command
      (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (let* ((output (buffer-string)))
-          (concat output
-                  (if (= 0 (process-exit-status proc))
-                      ""
-                    (if (= 1 (process-exit-status proc))
-                        "No matches found!"
-                      (format "Process exit status %d. Make sure to escape special characters and unbalanced parenthesis as appropriate!"
-                              (process-exit-status proc))))))
-        (plist-get args :cb-response)))
+       (let* ((output (buffer-string)))
+         (if (= 0 (process-exit-status proc))
+             (mcp-server-write-tool-call-text-result
+              (plist-get args :request)
+              output
+              (plist-get args :cb-response))
+           (if (= 1 (process-exit-status proc))
+               (mcp-server-write-tool-call-error-result
+                (plist-get args :request)
+                "No matches found!"
+                (plist-get args :cb-response))
+             (mcp-server-write-tool-call-error-result
+                (plist-get args :request)
+                (format "Process exit status %d.\n\n%s"
+                     (process-exit-status proc)
+                     output)
+                (plist-get args :cb-response))))))
      :args (list :request request :cb-response cb-response)
      :filter 'project-mcp-server-process-output-length-limit-filter)))
 
