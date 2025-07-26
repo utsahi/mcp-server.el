@@ -39,7 +39,8 @@
     (setq-local require-final-newline nil)
     (set-buffer-file-coding-system 'utf-8)
     (insert result)
-    (let ((save-silently t))
+    (let ((save-silently t)
+          (make-backup-files nil))
       (write-file (oref this -response-file) nil)))
   (cl-call-next-method this result))
 
