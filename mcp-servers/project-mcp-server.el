@@ -407,7 +407,7 @@ From now on, you will use the above project path.
 
     (:name "project-mcp-server-fd" :description "Finds file or directory paths using 'fd'."
            :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
-                        (:name match-regexp :type "string" :required nil :description "Regular expression passed to the 'fd' command."))
+                        (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command."))
            :async-lambda project-mcp-server-fd)
 
     (:name "project-mcp-server-git-pull-current-branch" :description "Update the repo using git pull on the current branch."
