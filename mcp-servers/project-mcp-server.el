@@ -180,6 +180,29 @@ output from the current buffer, and it can also make use of any additional argum
      :args (list :request request :cb-response cb-response)
      :filter 'project-mcp-server-process-output-length-limit-filter)))
 
+(defun project-mcp-server-fd (request arguments cb-response)
+  (let* ((directory (project-mcp-server-validate-path (gethash "directory-path" arguments)))
+         (search-pattern (gethash "match-regexp" arguments))
+         (default-directory directory)
+         (command `("fd" "--absolute-path" ,search-pattern ,directory)))
+    (project-mcp-server-collect-process-output
+     command
+     (lambda (proc event args)
+       (let* ((output (buffer-string)))
+         (if (= 0 (process-exit-status proc))
+             (mcp-server-write-tool-call-text-result
+              (plist-get args :request)
+              output
+              (plist-get args :cb-response))
+           (mcp-server-write-tool-call-error-result
+            (plist-get args :request)
+            (format "Process exit status %d.\n\n%s"
+                    (process-exit-status proc)
+                    output)
+            (plist-get args :cb-response)))))
+     :args (list :request request :cb-response cb-response)
+     :filter 'project-mcp-server-process-output-length-limit-filter)))
+
 (defun project-mcp-server-git (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
          (git-command (gethash "git-command" arguments))
@@ -213,40 +236,6 @@ output from the current buffer, and it can also make use of any additional argum
         (buffer-string)
         (plist-get args :cb-response)))
      :args (list :request request :cb-response cb-response))))
-
-(defun project-mcp-server-find-file-paths (request arguments cb-response)
-  (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
-         (file-names-arg (gethash "file-names" arguments))
-         (file-patterns (seq-map 'identity file-names-arg))
-         (default-directory directory)
-         (all-files (project-files (project-current)))
-         (matching-files (seq-filter
-                          (lambda (file)
-                            (seq-some (lambda (pattern)
-                                        (string-match-p (regexp-quote pattern) (file-name-nondirectory file)))
-                                      file-patterns))
-                          all-files)))
-    (mcp-server-write-tool-call-text-result
-     request
-     (json-encode `(:files ,matching-files))
-     cb-response)))
-
-(defun project-mcp-server-directory-files (request arguments cb-response)
-  (let* ((dp-arg (gethash "directory-path" arguments))
-         (path (if (file-exists-p dp-arg) dp-arg
-                 (file-name-concat
-                  (gethash "project-root" arguments)
-                  (gethash "directory-path" arguments)))))
-    (unless (file-directory-p path)
-      (error "Path not found or not a directory %s" path))
-    (mcp-server-write-tool-call-text-result
-     request
-     (json-encode (vconcat
-                   (cl-loop for e in
-                            (directory-files-and-attributes path t (gethash "match-regexp" arguments))
-                            if (not (string-match-p "\\.?\\.$" (nth 0 e)))
-                            collect (list :path (nth 0 e) :is-directory (nth 1 e)))))
-     cb-response)))
 
 (defun project-mcp-server-match-case-insensitively (dir file)
   (if (file-exists-p file)
@@ -414,18 +403,12 @@ From now on, you will use the above project path.
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name search-string :type "string" :required t :description "String to replace.")
                         (:name replacement :type "string" :required t :description "UTF-8 encoded replacement."))
-           :async-lambda project-mcp-server-replace-string-in-file)
+           :async-lambda project-mcp-server-replace-string-in-file)    
 
-    (:name "project-mcp-server-find-file-paths" :description "Returns the project file paths."
-           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name file-names :type "array" :required t :description "One more file name substrings to match." :items (:type . "string")))
-           :async-lambda project-mcp-server-find-file-paths)
-
-    (:name "project-mcp-server-directory-files" :description "Reads the contents of the specified directory."
-           :properties ((:name directory-path :type "string" :required t :description "Directory path. If relative, used relative to the last active project.")
-                        (:name project-root :type "string" :required nil :description "Last active project.")
-                        (:name match-regexp :type "string" :required nil :description "Regular expression for matching file names. E.g. to find .el and .org files '.el\\\\|.org'"))
-           :async-lambda project-mcp-server-directory-files)
+    (:name "project-mcp-server-fd" :description "Finds file or directory paths using 'fd'."
+           :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
+                        (:name match-regexp :type "string" :required nil :description "Regular expression passed to the 'fd' command."))
+           :async-lambda project-mcp-server-fd)
 
     (:name "project-mcp-server-git-pull-current-branch" :description "Update the repo using git pull on the current branch."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
