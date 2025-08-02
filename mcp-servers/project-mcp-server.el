@@ -23,7 +23,7 @@
 (require 'mcp-server)
 (require 'project)
 
-(defconst project-mcp-server-max-file-length (/ 65536 1))
+(defconst project-mcp-server-max-file-length 65536)
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -59,7 +59,8 @@
 (defun project-mcp-server-validate-path (path)
   (unless (and (not (string-equal "" path))
                (file-exists-p path)
-               (project-current nil path))
+               (let* ((default-directory (file-name-directory path)))
+                 (project-current nil path)))
     (error "Path '%s' is not within a known project or doesn't exist! You must get the last active project first." path))
   path)
 
@@ -272,28 +273,25 @@ output from the current buffer, and it can also make use of any additional argum
                                 (- (cdr range) (car range) -1))))
                 (setq content (string-join some-lines "\n"))))
             (if (> (length content) project-mcp-server-max-file-length)
-                `(:file ,file
-                        :error ,(format "File %s too large. Length %d. Line count %d. Narrow down the line ranges."
-                                        file
-                                        (length content)
-                                        (length (string-split content "\n"))))
-              `(:matched-file ,effective-path
-                              :input-file ,file
-                              :content ,content))))
-      `(:file ,file
-              :error ,(format "Path not found %s. Under directory %s. If using a relative
+                (error "File %s too large. Length %d. Line count %d. Narrow down the line ranges. Maximum allowed length %d."
+                       file
+                       (length content)
+                       (length (string-split content "\n"))
+                       project-mcp-server-max-file-length)
+              content)))
+      (error "Path not found %s. Under directory '%s'. If using a relative
 path, make sure it is constructed correctly relative to the directory
 path.  The match may be case sensitive. Try to find the actual casing of
 the file or directory names."
-                              file
-                              directory)))))
+              file
+              directory))))
 
-(defun project-mcp-server-read-files (request arguments cb-response)
+(defun project-mcp-server-read-file (request arguments cb-response)
   (let* ((directory (gethash "project-root" arguments))
-         (paths (gethash "file-paths" arguments)))
+         (path (gethash "file-path" arguments)))
     (mcp-server-write-tool-call-text-result
      request
-     (json-encode (vconcat (mapcar (lambda (p) (project-mcp-server-read-file-lines-or-error directory p nil)) paths)))
+     (project-mcp-server-read-file-lines-or-error directory path nil)
      cb-response)))
 
 (defun project-mcp-server-read-file-lines (request arguments cb-response)
@@ -366,13 +364,7 @@ the file or directory names."
              (mcp-server-prompt-write-user-message
               request
               cb-response
-              (format "project-mcp-server-get-last-active-project has discovered that the current
-project directory is
-
-%s
-
-From now on, you will use the above project path.
-"
+              (format "Please use the following project directory %s."
                       (project-mcp-server-last-active-project-or-error)))))))
 
 (cl-defmethod mcp-server-enumerate-tools ((this project-mcp-server))
@@ -380,10 +372,10 @@ From now on, you will use the above project path.
     (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project."
            :async-lambda project-mcp-server-get-last-active-project)
 
-    (:name "project-mcp-server-read-files" :description "Reads the contents of the files as utf8 text."
-           :properties ((:name file-paths :type "array" :required t :description "File paths." :items (:type . "string"))
+    (:name "project-mcp-server-read-file" :description "Reads the contents of the file as utf8 text."
+           :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root."))
-           :async-lambda project-mcp-server-read-files)
+           :async-lambda project-mcp-server-read-file)
 
     (:name "project-mcp-server-read-file-lines" :description "Reads the range of lines from the file as utf8 text."
            :properties ((:name file-path :type "string" :required t :description "File path.")
