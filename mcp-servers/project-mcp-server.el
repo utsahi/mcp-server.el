@@ -224,20 +224,6 @@ output from the current buffer, and it can also make use of any additional argum
         (plist-get args :cb-response)))
      :args (list :request request :cb-response cb-response))))
 
-(defun project-mcp-server-git-pull-current-branch (request arguments cb-response)
-  (let* ((directory (project-mcp-server-validate-path (gethash "directory" arguments)))
-         (default-directory directory)
-         (current-branch (string-trim (shell-command-to-string "git branch --show-current")))
-         (command (list "git" "pull" (or (gethash "remote" arguments) "origin") current-branch "--no-tags" "--no-stat")))
-    (project-mcp-server-collect-process-output
-     command
-     (lambda (proc event args)
-       (mcp-server-write-tool-call-text-result
-        (plist-get args :request)
-        (buffer-string)
-        (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
-
 (defun project-mcp-server-match-case-insensitively (dir file)
   (if (file-exists-p file)
       (expand-file-name file)
@@ -401,11 +387,6 @@ the file or directory names."
            :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
                         (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command."))
            :async-lambda project-mcp-server-fd)
-
-    (:name "project-mcp-server-git-pull-current-branch" :description "Update the repo using git pull on the current branch."
-           :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
-                        (:name remote :type "string" :required nil :description "remote name. 'origin' by default."))
-           :async-lambda project-mcp-server-git-pull-current-branch)
 
     (:name "project-mcp-server-git" :description "runs the given git command."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
