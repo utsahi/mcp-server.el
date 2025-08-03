@@ -358,25 +358,26 @@ the file or directory names."
     (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project."
            :async-lambda project-mcp-server-get-last-active-project)
 
-    (:name "project-mcp-server-read-file" :description "Reads the contents of the file as utf8 text."
+    (:name "project-mcp-server-read-file" :description "Reads the entire contents of a file. Fails with an error message if the file is too large."
            :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root."))
            :async-lambda project-mcp-server-read-file)
 
-    (:name "project-mcp-server-read-file-lines" :description "Reads the range of lines from the file as utf8 text."
+    (:name "project-mcp-server-read-file-lines" :description "Reads a specific range of lines from a file. Useful as a fallback to
+read parts of a large file."
            :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root.")
                         (:name line-range-start :type "number" :required t :description "Line range start.")
                         (:name line-range-end :type "number" :required t :description "Line range end"))
            :async-lambda project-mcp-server-read-file-lines)
 
-    (:name "project-mcp-server-write-file-content" :description "Overwrites the contents of the file."
+    (:name "project-mcp-server-write-file-content" :description "Overwrites the entire file content."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name content :type "string" :required t :description "UTF-8 encoded File content."))
            :async-lambda project-mcp-server-write-file-content)
 
-    (:name "project-mcp-server-replace-string-in-file" :description "Replaces a string in file."
+    (:name "project-mcp-server-replace-string-in-file" :description "Replaces all occurrences of a string in a file. Useful to update a large file when the lines or parts of the file to be replaced are known."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name search-string :type "string" :required t :description "String to replace.")
