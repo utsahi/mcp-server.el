@@ -23,7 +23,7 @@
 (require 'mcp-server)
 (require 'project)
 
-(defconst project-mcp-server-max-file-length 65536)
+(defconst project-mcp-server-max-file-length 150000)
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -38,6 +38,7 @@
    "describe"
    "blame"
    "ls-files"
+   "merge"
    "merge-tree"
    "merge-base"
    "branch"])
