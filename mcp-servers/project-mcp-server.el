@@ -185,8 +185,13 @@ output from the current buffer, and it can also make use of any additional argum
 (defun project-mcp-server-fd (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory-path" arguments)))
          (search-pattern (gethash "match-regexp" arguments))
+         (types (gethash "types" arguments))
          (default-directory directory)
-         (command `("fd" "--absolute-path" ,search-pattern ,directory)))
+         (command (append '("fd"
+                           "--absolute-path")
+                          (if types (seq-mapcat (lambda (t) `("--type" ,t)) types))
+                          `(,search-pattern
+                            ,directory))))
     (project-mcp-server-collect-process-output
      command
      (lambda (proc event args)
@@ -387,7 +392,8 @@ read parts of a large file."
 
     (:name "project-mcp-server-fd" :description "Finds file or directory paths using 'fd'."
            :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
-                        (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command."))
+                        (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command.")
+                        (:name types :type "array" :required nil :description "types one or more of [\"file\" \"directory\" \"executable\" \"empty\"]" :items (:type . "string")))
            :async-lambda project-mcp-server-fd)
 
     (:name "project-mcp-server-git" :description "runs the given git command."
