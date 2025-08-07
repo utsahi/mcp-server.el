@@ -28,20 +28,21 @@
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
 (defvar project-mcp-server-allowed-git-commands
-  ["status"
-   "log"
+  ["blame"
+   "branch"
+   "describe"
    "diff"
-   "show"
    "fetch"
    "grep"
-   "reflog"
-   "describe"
-   "blame"
+   "log"
    "ls-files"
    "merge"
-   "merge-tree"
    "merge-base"
-   "branch"])
+   "merge-tree"
+   "pull"
+   "reflog"
+   "show"
+   "status"])
 
 (defun project-mcp-server-set-window-project-timer-fn ()
   (setq project-mcp-server-last-buffer-project
@@ -228,7 +229,8 @@ output from the current buffer, and it can also make use of any additional argum
         (plist-get args :request)
         (buffer-string)
         (plist-get args :cb-response)))
-     :args (list :request request :cb-response cb-response))))
+     :args (list :request request :cb-response cb-response)
+     :filter 'project-mcp-server-process-output-length-limit-filter)))
 
 (defun project-mcp-server-match-case-insensitively (dir file)
   (if (file-exists-p file)
