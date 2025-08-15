@@ -66,11 +66,6 @@
     (error "Path '%s' is not within a known project or doesn't exist! You must get the last active project first." path))
   path)
 
-(defun project-mcp-server-maybe-windows-path (path)
-  (if (eq system-type 'windows-nt)
-      (string-replace "/" "\\" path)
-    path))
-
 (defun project-mcp-server-process-output-length-limit-filter (proc string)
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
