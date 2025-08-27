@@ -251,7 +251,6 @@ output from the current buffer, and it can also make use of any additional argum
         (with-temp-buffer
           (project-mcp-server-validate-path effective-path)
           (insert-file-contents-literally effective-path)
-          (decode-coding-region (point-min) (point-max) 'utf-8)
           (let* ((full (buffer-string))
                  (content))
             (if (not range)
@@ -298,22 +297,16 @@ the file or directory names."
                 (project-mcp-server-match-case-insensitively
                  (gethash "project-root" arguments)
                  (gethash "file-path" arguments))))
-         (replacement (gethash "replacement" arguments))
-         (normalized-replacement (string-replace "\r" "" replacement))
-         (search-string (gethash "search-string" arguments))
-         (normalized-search-string (string-replace "\r" "" search-string))
+         (replacement (gethash "replacement" arguments))         
+         (search-string (gethash "search-string" arguments))         
          (replacement-count 0))
     (with-temp-buffer
-      (set-buffer-file-coding-system 'utf-8)
-      (insert-file-contents-literally path)
-      (beginning-of-buffer)
-      (while (search-forward "\r" nil t)
-        (replace-match "" nil t))
-      (beginning-of-buffer)
-      (while (search-forward normalized-search-string nil t)
-        (replace-match normalized-replacement nil t)
+      (insert-file-contents-literally path)            
+      (goto-char (point-min))
+      (while (search-forward search-string nil t)
+        (replace-match replacement nil t)
         (cl-incf replacement-count))
-      (let* ((coding-system-for-write 'utf-8)) (write-file path)))
+      (write-file path))
     (mcp-server-write-tool-call-text-result
      request
      (format "Replaced %d occurrences. %s"
@@ -327,10 +320,7 @@ the file or directory names."
   (let* ((fp-arg (gethash "file-path" arguments))
          (path (if (file-exists-p fp-arg) fp-arg
                  (file-name-concat (gethash "project-root" arguments) (gethash "file-path" arguments)))))
-    (with-temp-buffer
-      (set-buffer-file-coding-system 'utf-8)
-      (insert (gethash "content" arguments))
-      (let* ((coding-system-for-write 'utf-8)) (write-file path)))
+    (write-region (gethash "content" arguments) nil path nil 'novisit)
     (mcp-server-write-tool-call-text-result
      request
      "Success"
@@ -377,14 +367,14 @@ read parts of a large file."
     (:name "project-mcp-server-write-file-content" :description "Overwrites the entire file content."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
-                        (:name content :type "string" :required t :description "UTF-8 encoded File content."))
+                        (:name content :type "string" :required t :description "File content."))
            :async-lambda project-mcp-server-write-file-content)
 
     (:name "project-mcp-server-replace-string-in-file" :description "Replaces all occurrences of a string in a file. Useful to update a large file when the lines or parts of the file to be replaced are known."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name search-string :type "string" :required t :description "String to replace.")
-                        (:name replacement :type "string" :required t :description "UTF-8 encoded replacement."))
+                        (:name replacement :type "string" :required t :description "Replacement string."))
            :async-lambda project-mcp-server-replace-string-in-file)    
 
     (:name "project-mcp-server-fd" :description "Finds file or directory paths using 'fd'."
