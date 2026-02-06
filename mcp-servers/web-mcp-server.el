@@ -40,19 +40,36 @@
           request
           (buffer-substring-no-properties (point-min) (point-max))
           cb-response)
-         
+         ))
+     nil
+     nil
+     t)
+    ))
 
-         
-         ;; (goto-char (point-min))
-         ;; (when (search-forward-regexp "\r?\n\r?\n" nil t)
-         ;;   (let ((body (buffer-substring-no-properties (point) (point-max))))
-         ;;     (with-current-buffer (get-buffer-create "*web-mcp-last-render-buffer*")
-         ;;       (erase-buffer)
-         ;;       (insert body)
-         ;;       (shr-render-buffer (current-buffer))
-         ;;       (let* ((result (buffer-string)))
-         ;;         result))
-         ;;     ))
+(defun web-mcp-server-render-web-page (request arguments cb-response)
+  (let* ((url (gethash "url" arguments)))
+    (url-retrieve
+     url
+     (lambda (status)
+       (if (plist-get status :error)
+           (progn
+             (mcp-server-write-tool-call-error-result
+              request
+              (format "Failed to fetch URL: %s" (plist-get status :error))
+              cb-response))
+         (goto-char (point-min))
+         (when (search-forward-regexp "\r?\n\r?\n" nil t)
+           (let ((body (buffer-substring-no-properties (point) (point-max))))
+             (with-current-buffer (get-buffer-create "*web-mcp-last-render-buffer*")
+               (erase-buffer)
+               (insert body)
+               (with-silent-modifications (shr-render-region (point-min) (point-max)))
+               (let* ((result (buffer-substring-no-properties (point-min) (point-max))))
+                 (mcp-server-write-tool-call-text-result
+                  request
+                  result
+                  cb-response)))
+             ))
          ))
      nil
      nil
@@ -64,6 +81,10 @@
     (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers."
            :properties ((:name url :type "string" :required t :description "URL to fetch."))
            :async-lambda web-mcp-server-url-retrieve)
+
+    (:name "web-mcp-render-web-page" :description "Returns the rendered html content of the URL. Response does not include links, markup etc. "
+           :properties ((:name url :type "string" :required t :description "URL to render."))
+           :async-lambda web-mcp-server-render-web-page)
     ))
 
 (provide 'web-mcp-server)
