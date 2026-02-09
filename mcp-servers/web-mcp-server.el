@@ -21,14 +21,50 @@
 
 (require 'mcp-server)
 
+(defvar web-mcp-server-url-retrieve-timeout 20)
+(defvar web-mcp-server-url-retrieve-max-length 250000)
+
 (defclass web-mcp-server (mcp-server)
   (()))
 
+(defun web-mcp-server-write-result (request result cb-response)
+  (if (> (length result) web-mcp-server-url-retrieve-max-length)
+      (mcp-server-write-tool-call-error-result
+       request
+       (format "Length of the response string (%d) exceeds the configured max length %d. Try alternative tool. E.g., try retrieving rendered web page." (length result) web-mcp-server-url-retrieve-max-length)
+       cb-response)
+    (mcp-server-write-tool-call-text-result
+     request
+     result
+     cb-response)))
+
+(defun web-mcp-server-url-retrieve-internal (url callback)
+  (let* ((callback-args (list
+			 (list :callback callback
+			       :done nil
+			       :cancellation-timer nil))))
+    (let* ((killed)
+	   (url-buffer
+	    (url-retrieve url callback callback-args t t)))
+      (plist-put (nth 0 callback-args)
+		 :cancellation-timer
+		 (run-with-timer
+		  web-mcp-server-url-retrieve-timeout
+		  nil
+		  (lambda ()
+		    (when (and (not (plist-get callback-args :done))
+			       (process-live-p (get-buffer-process url-buffer)))
+		      (message "web-mcp-server request timeout. Killing the process.")
+		      (set-process-query-on-exit-flag
+		       (get-buffer-process url-buffer)
+		       nil)
+		      (kill-buffer url-buffer))))))))
+
 (defun web-mcp-server-url-retrieve (request arguments cb-response)
   (let* ((url (gethash "url" arguments)))
-    (url-retrieve
+    (web-mcp-server-url-retrieve-internal
      url
-     (lambda (status)
+     (lambda (status args)
        (if (plist-get status :error)
            (progn
              (mcp-server-write-tool-call-error-result
@@ -36,21 +72,16 @@
               (format "Failed to fetch URL: %s" (plist-get status :error))
               cb-response))
 
-         (mcp-server-write-tool-call-text-result
+         (web-mcp-server-write-result
           request
           (buffer-substring-no-properties (point-min) (point-max))
-          cb-response)
-         ))
-     nil
-     nil
-     t)
-    ))
+          cb-response))))))
 
 (defun web-mcp-server-render-web-page (request arguments cb-response)
   (let* ((url (gethash "url" arguments)))
-    (url-retrieve
+    (web-mcp-server-url-retrieve-internal
      url
-     (lambda (status)
+     (lambda (status args)
        (if (plist-get status :error)
            (progn
              (mcp-server-write-tool-call-error-result
@@ -65,20 +96,16 @@
                (insert body)
                (with-silent-modifications (shr-render-region (point-min) (point-max)))
                (let* ((result (buffer-substring-no-properties (point-min) (point-max))))
-                 (mcp-server-write-tool-call-text-result
+                 (web-mcp-server-write-result
                   request
                   result
                   cb-response)))
-             ))
-         ))
-     nil
-     nil
-     t)
-    ))
+             )))))))
 
 (cl-defmethod mcp-server-enumerate-tools ((this web-mcp-server))
   `(
-    (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers."
+    (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers. To search
+the web for topics, news, quotes, weather etc., use https://html.duckduckgo.com/html/?q=<URL-ESCAPED-SEARCH-QUERY>."
            :properties ((:name url :type "string" :required t :description "URL to fetch."))
            :async-lambda web-mcp-server-url-retrieve)
 
