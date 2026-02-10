@@ -1,4 +1,4 @@
-;;; web-mcp-server.el --- Project aware mcp server -*- lexical-binding: t; -*-
+;;; web-mcp-server.el --- Web mcp server -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Kishor Datar
 ;; Author: Kishor Datar <kishordatar at gmail>
