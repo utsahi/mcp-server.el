@@ -23,7 +23,7 @@
 (require 'mcp-server)
 (require 'project)
 
-(defconst project-mcp-server-max-file-length 150000)
+(defconst project-mcp-server-max-file-length 250000)
 (defvar project-mcp-server-last-buffer-project nil)
 (defvar project-mcp-server-set-window-project-idle-timer-duration 2)
 (defvar project-mcp-server-set-window-project-timer nil)
@@ -43,6 +43,30 @@
    "reflog"
    "show"
    "status"])
+
+(defgroup project-mcp-server nil
+  "Project MCP server."
+  :group 'project-mcp-server)
+
+(defcustom project-mcp-server-project-relations nil
+  "Alist mapping project root directories to lists of related project root directories.
+Each element is of the form (PROJECT-ROOT . (RELATED-ROOT ...)).
+"
+  :type '(alist :key-type (string :tag "Project root")
+                :value-type (repeat string :tag "Related project"))
+  :group 'project-mcp-server)
+
+(defun project-mcp-server-add-project-relation ()
+  (interactive)
+  (let* ((current (or (project-current) (user-error "Not inside a project.")))
+         (new (project-prompt-project-dir)))
+    (when new
+      (let* ((curr-proj-dir (expand-file-name (project-root current)))
+             (new-proj-dir (expand-file-name new))
+             (curr-relations (alist-get curr-proj-dir project-mcp-server-project-relations nil nil 'string-equal)))
+        (if curr-relations
+            (setf (alist-get curr-proj-dir project-mcp-server-project-relations nil nil 'string-equal) (list (cons new-proj-dir  (car curr-relations))))
+          (customize-save-variable 'project-mcp-server-project-relations (cons (list curr-proj-dir (list new-proj-dir)) project-mcp-server-project-relations)))))))
 
 (defun project-mcp-server-set-window-project-timer-fn ()
   (setq project-mcp-server-last-buffer-project
