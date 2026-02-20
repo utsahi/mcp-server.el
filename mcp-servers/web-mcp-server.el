@@ -119,7 +119,8 @@
                    (unless (process-live-p proc)
                      (with-current-buffer buffer
                        (funcall cb proc event (plist-get args :args)))
-                     (kill-buffer buffer)))))))
+                     (kill-buffer buffer)
+                     (kill-buffer err-buf)))))))
 
 (defun web-mcp-server-yt-dlp-minimize-json-info (info)
   (let* ((ht (make-hash-table))
