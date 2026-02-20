@@ -102,6 +102,64 @@
                   cb-response)))
              )))))))
 
+(defun web-mcp-server-collect-process-output (command cb &rest args)
+  (let* ((buffer-name (generate-new-buffer-name "*web-mcp-server-process-output*"))
+         (buffer (get-buffer-create buffer-name))
+         (err-buf (get-buffer-create (generate-new-buffer-name "*web-mcp-server-process-error*"))))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (make-process
+       :name (format "%s-%s" (car command) "web-mcp-server")
+       :buffer buffer
+       :command command
+       :noquery t
+       :stderr err-buf
+       :filter (plist-get args :filter)
+       :sentinel (lambda (proc event)
+                   (unless (process-live-p proc)
+                     (with-current-buffer buffer
+                       (funcall cb proc event (plist-get args :args)))
+                     (kill-buffer buffer)))))))
+
+(defun web-mcp-server-yt-dlp-minimize-json-info (info)
+  (let* ((ht (make-hash-table))
+         (parsed (json-parse-string info)))
+    (maphash
+     (lambda (key val)
+       (if (string-equal "automatic_captions" key)
+           (let* ((caph (make-hash-table)))
+             (maphash
+              (lambda (capk capv)
+                (when (or (string-equal "en" capk) (string-equal "en-orig" capk))
+                  (puthash capk capv caph)))
+              val)
+             (puthash key caph ht))
+         (puthash key val ht))
+       )
+     parsed)
+    (json-encode ht)))
+
+(defun web-mcp-server-yt-dlp-video-json-info (request arguments cb-response)
+  (let* ((command
+          (append
+           (list "yt-dlp" "-j" (or (gethash "url" arguments) (user-error "URL not specified."))))))
+    (web-mcp-server-collect-process-output
+     command
+     (lambda (proc event args)
+       (let* ((output (buffer-string)))
+         (if (= 0 (process-exit-status proc))
+             (mcp-server-write-tool-call-text-result
+              (plist-get args :request)
+              (web-mcp-server-yt-dlp-minimize-json-info output)
+              (plist-get args :cb-response))
+           (mcp-server-write-tool-call-error-result
+            (plist-get args :request)
+            (format "Process exit status %d.\n\n%s"
+                    (process-exit-status proc)
+                    output)
+            (plist-get args :cb-response)))))
+     :args (list :request request :cb-response cb-response))))
+
 (cl-defmethod mcp-server-enumerate-tools ((this web-mcp-server))
   `(
     (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers. To search
@@ -112,6 +170,11 @@ the web for topics, news, quotes, weather etc., use https://html.duckduckgo.com/
     (:name "web-mcp-render-web-page" :description "Returns the rendered html content of the URL. Response does not include links, markup etc. "
            :properties ((:name url :type "string" :required t :description "URL to render."))
            :async-lambda web-mcp-server-render-web-page)
+
+    (:name "web-mcp-server-yt-dlp-video-json-info" :description "Returns video info using yt-dlp."
+           :properties ((:name url :type "string" :required t :description "URL of the video."))
+           :async-lambda web-mcp-server-yt-dlp-video-json-info)
+    
     ))
 
 (provide 'web-mcp-server)

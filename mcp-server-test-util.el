@@ -28,7 +28,7 @@
     (while fn-args-copy      
       (puthash (symbol-name (car fn-args-copy)) (cadr fn-args-copy) args-ht)
       (setq fn-args-copy (cddr fn-args-copy)))
-    (apply fn (list req args-ht (lambda (ar) (message "Call completed"))))))
+    (apply fn (list req args-ht (lambda (ar) (message "Call completed with output.\n %s" ar))))))
 
 ; (mcp-server-debug-tool 'web-mcp-server-render-web-page '(url "https://www.google.com/"))
 
