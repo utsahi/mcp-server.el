@@ -27,16 +27,30 @@
 (defclass web-mcp-server (mcp-server)
   (()))
 
-(defun web-mcp-server-write-result (request result cb-response)
-  (if (> (length result) web-mcp-server-url-retrieve-max-length)
-      (mcp-server-write-tool-call-error-result
+(defun web-mcp-server-write-result (request arguments result cb-response)
+  (let* ((start-offset (or (gethash "start-offset" arguments) 0))
+         (truncated (if (= 0 start-offset) result (substring result start-offset nil))))
+    (if (> (length truncated) web-mcp-server-url-retrieve-max-length)
+        (mcp-server-write-tool-call-text-result
+         request
+         (format "Length of the response starting at offset (%d) is (%d) which exceeds the
+configured max length %d. Sending the first (%d) characters. Alternative
+retrieval method such as reading the page incrementally may be
+necessary.
+
+-- partial response ---
+
+%s"
+                 start-offset
+                 (length truncated)
+                 web-mcp-server-url-retrieve-max-length
+                 web-mcp-server-url-retrieve-max-length
+                 (substring truncated 0 web-mcp-server-url-retrieve-max-length))
+         cb-response)
+      (mcp-server-write-tool-call-text-result
        request
-       (format "Length of the response string (%d) exceeds the configured max length %d. Try alternative tool. E.g., try retrieving rendered web page." (length result) web-mcp-server-url-retrieve-max-length)
-       cb-response)
-    (mcp-server-write-tool-call-text-result
-     request
-     result
-     cb-response)))
+       truncated
+       cb-response))))
 
 (defun web-mcp-server-url-retrieve-internal (url callback)
   (let* ((callback-args (list
@@ -74,6 +88,7 @@
 
          (web-mcp-server-write-result
           request
+          arguments
           (buffer-substring-no-properties (point-min) (point-max))
           cb-response))))))
 
@@ -98,6 +113,7 @@
                (let* ((result (buffer-substring-no-properties (point-min) (point-max))))
                  (web-mcp-server-write-result
                   request
+                  arguments
                   result
                   cb-response)))
              )))))))
@@ -165,11 +181,13 @@
   `(
     (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers. To search
 the web for topics, news, quotes, weather etc., use https://html.duckduckgo.com/html/?q=<URL-ESCAPED-SEARCH-QUERY>."
-           :properties ((:name url :type "string" :required t :description "URL to fetch."))
+           :properties ((:name url :type "string" :required t :description "URL to fetch.")
+                        (:name start-offset :type "number" :required nil :description "Skip first start-offset characters from the returned content. Use this to retrieve large pages incrementally."))
            :async-lambda web-mcp-server-url-retrieve)
 
     (:name "web-mcp-render-web-page" :description "Returns the rendered html content of the URL. Response does not include links, markup etc. "
-           :properties ((:name url :type "string" :required t :description "URL to render."))
+           :properties ((:name url :type "string" :required t :description "URL to render.")
+                        (:name start-offset :type "number" :required nil :description "Skip first start-offset characters from the returned content. Use this to retrieve large pages incrementally."))
            :async-lambda web-mcp-server-render-web-page)
 
     (:name "web-mcp-server-yt-dlp-video-json-info" :description "Returns video info using yt-dlp."
