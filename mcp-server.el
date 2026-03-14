@@ -21,54 +21,105 @@
 
 (require 'json)
 
+(defcustom mcp-server-trace-level nil
+  "Default tracing level for MCP server instances.
+nil disables tracing.  The symbol or string `verbose' enables verbose
+tracing for all server instances.  An alist of (SERVER-TYPE . LEVEL)
+entries enables per-type tracing, where SERVER-TYPE is the class name
+as a string and LEVEL is \\='verbose or \"verbose\"."
+  :type '(choice (const :tag "Disabled" nil)
+                 (const :tag "Verbose" verbose)
+                 (alist :key-type string :value-type symbol))
+  :group 'mcp-server)
+
 (defclass mcp-server ()
-  (()))
+  ((-name :initarg :name :initform nil
+          :documentation "Optional name for this instance, used as the trace buffer identifier.")
+   (-trace-level :initarg :trace-level :initform :unset
+                 :documentation "Per-instance trace level.  :unset falls back to `mcp-server-trace-level'.")
+   (-trace-buffer :initform nil)))
+
+(defun mcp-server--tracing-enabled-p (server)
+  (let ((level (let ((v (oref server -trace-level)))
+                 (if (eq v :unset) mcp-server-trace-level v))))
+    (cond
+     ((null level) nil)
+     ((or (eq level 'verbose) (equal level "verbose")) t)
+     ((consp level)
+      (let* ((type (symbol-name (type-of server)))
+             (entry (assoc type level)))
+        (and entry (or (eq (cdr entry) 'verbose) (equal (cdr entry) "verbose")))))
+     (t nil))))
+
+(defun mcp-server--trace-buffer (server)
+  (or (and (oref server -trace-buffer)
+           (buffer-live-p (oref server -trace-buffer))
+           (oref server -trace-buffer))
+      (let* ((name (oref server -name))
+             (buf (get-buffer-create
+                   (if name
+                       (format "*mcp-server-%s-trace*" name)
+                     (format "*mcp-server-%s-%d-trace*" (type-of server) (emacs-pid))))))
+        (oset server -trace-buffer buf)
+        buf)))
+
+(defun mcp-server--trace (server trace-fn)
+  (when (mcp-server--tracing-enabled-p server)
+    (let ((text (funcall trace-fn)))
+      (with-current-buffer (mcp-server--trace-buffer server)
+        (goto-char (point-max))
+        (insert (format-time-string "[%Y-%m-%dT%T%z] "))
+        (insert (format "%s\n" text))))))
 
 (cl-defgeneric mcp-server-process-request (obj request cb-response))
 (cl-defmethod mcp-server-process-request ((this mcp-server) request cb-response)
-  (condition-case outer-ex
-      (let* ((parsed-request (json-parse-string request))
-	     (id (gethash "id" parsed-request))
-	     (method (gethash "method" parsed-request)))
-	(condition-case ex
-	    (cond ((string-equal method "initialize")
-		   (mcp-server-process-initialize-request this parsed-request cb-response))
-		  ((string-equal method "notifications/initialized")
-		   (mcp-server-on-notifications-initialized this parsed-request cb-response))
-		  ((string-equal method "notifications/cancelled")
-		   (mcp-server-on-notifications-cancelled this parsed-request cb-response))
-		  ((string-equal method "tools/list")
-		   (mcp-server-process-tools-list-request this parsed-request cb-response))
-		  ((string-equal method "resources/list")
-		   (mcp-server-process-resources-list-request this parsed-request cb-response))
-		  ((string-equal method "resources/templates/list")
-		   (mcp-server-process-resources-templates-list-request this parsed-request cb-response))
-		  ((string-equal method "prompts/list")
-		   (mcp-server-process-prompts-list-request this parsed-request cb-response))
-                  ((string-equal method "prompts/get")
-                   (mcp-server-process-prompts-get-request this parsed-request cb-response))
-		  ((string-equal method "ping")
-		   (mcp-server-process-ping-request this parsed-request cb-response))
-		  ((string-equal method "logging/setLevel")
-		   (mcp-server-process-logging-setlevel-request this parsed-request cb-response))
-		  ((string-equal method "tools/call")
-		   (condition-case ex
-		       (mcp-server-process-tools-call-request this parsed-request cb-response)
-		     (error
-		      (mcp-server-write-json-line
-		       cb-response
-		       (mcp-server-compose-tool-call-error id ex)
-		       t))
-		     ))
-		  ((error "Unknown method %s" method)))
-	  (error (mcp-server-write-json-line
-		  cb-response
-		  (mcp-server-compose-rpc-server-error id method ex)
-		  t))))
-    (error (mcp-server-write-json-line
-	    cb-response
-	    (mcp-server-compose-rpc-server-error 0 "" outer-ex)
-	    t))))
+  (mcp-server--trace this (lambda () (format "Request:  %s" request)))
+  (let ((tracing-cb-response (lambda (result)
+                               (mcp-server--trace this (lambda () (format "Response: %s" result)))
+                               (funcall cb-response result))))
+    (condition-case outer-ex
+        (let* ((parsed-request (json-parse-string request))
+	       (id (gethash "id" parsed-request))
+	       (method (gethash "method" parsed-request)))
+	  (condition-case ex
+	      (cond ((string-equal method "initialize")
+		     (mcp-server-process-initialize-request this parsed-request tracing-cb-response))
+		    ((string-equal method "notifications/initialized")
+		     (mcp-server-on-notifications-initialized this parsed-request tracing-cb-response))
+		    ((string-equal method "notifications/cancelled")
+		     (mcp-server-on-notifications-cancelled this parsed-request tracing-cb-response))
+		    ((string-equal method "tools/list")
+		     (mcp-server-process-tools-list-request this parsed-request tracing-cb-response))
+		    ((string-equal method "resources/list")
+		     (mcp-server-process-resources-list-request this parsed-request tracing-cb-response))
+		    ((string-equal method "resources/templates/list")
+		     (mcp-server-process-resources-templates-list-request this parsed-request tracing-cb-response))
+		    ((string-equal method "prompts/list")
+		     (mcp-server-process-prompts-list-request this parsed-request tracing-cb-response))
+                    ((string-equal method "prompts/get")
+                     (mcp-server-process-prompts-get-request this parsed-request tracing-cb-response))
+		    ((string-equal method "ping")
+		     (mcp-server-process-ping-request this parsed-request tracing-cb-response))
+		    ((string-equal method "logging/setLevel")
+		     (mcp-server-process-logging-setlevel-request this parsed-request tracing-cb-response))
+		    ((string-equal method "tools/call")
+		     (condition-case ex
+		         (mcp-server-process-tools-call-request this parsed-request tracing-cb-response)
+		       (error
+		        (mcp-server-write-json-line
+		         tracing-cb-response
+		         (mcp-server-compose-tool-call-error id ex)
+		         t))
+		       ))
+		    ((error "Unknown method %s" method)))
+	    (error (mcp-server-write-json-line
+		    tracing-cb-response
+		    (mcp-server-compose-rpc-server-error id method ex)
+		    t))))
+      (error (mcp-server-write-json-line
+	      tracing-cb-response
+	      (mcp-server-compose-rpc-server-error 0 "" outer-ex)
+	      t)))))
 
 (cl-defgeneric mcp-server-process-initialize-request (obj request cb-response))
 (cl-defmethod mcp-server-process-initialize-request ((this mcp-server) request cb-response)

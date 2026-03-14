@@ -85,7 +85,7 @@
 	  (or (gethash session file-promising-future-sessions)
  	      (puthash session (file-promising-future :request-file request-file :response-file response-file :timeout-sec timeout-sec)
 		       file-promising-future-sessions)))
-	 (server (make-instance mcp-server)))    
+	 (server (make-instance mcp-server :name session)))    
     (promising-future-schedule
      promising-future
      (lambda (request)
