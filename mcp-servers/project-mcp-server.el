@@ -166,7 +166,7 @@ output from the current buffer, and it can also make use of any additional argum
          (context-after (or (gethash "context-after" arguments) 0))
          (custom-type "custom")
          (default-directory directory)
-         (command (append (list "rg")
+         (command (append (list "rg" "--color=never")
                           (when file-extensions
                             (list "--type-add"
                                   (format "%s:*.{%s}"
@@ -208,7 +208,7 @@ output from the current buffer, and it can also make use of any additional argum
          (types (gethash "types" arguments))
          (default-directory directory)
          (command (append '("fd"
-                           "--absolute-path")
+                           "--color=never" "--absolute-path")
                           (if types (seq-mapcat (lambda (t) `("--type" ,t)) types))
                           `(,search-pattern
                             ,directory))))
@@ -240,7 +240,7 @@ output from the current buffer, and it can also make use of any additional argum
                                 (error "git-command %s is not allowed!" (gethash "git-command" arguments))))
          (input-args (mapcar 'identity (gethash "args" arguments)))
          (filtered-input-args (if (string-equal git-command (car input-args)) (cdr input-args) input-args))
-         (command (append (list "git" "--no-pager" validated-command) (seq-map 'identity filtered-input-args))))
+         (command (append (list "git" "--no-pager" "-c" "color.ui=false" validated-command) (seq-map 'identity filtered-input-args))))
     (project-mcp-server-collect-process-output
      command
      (lambda (proc event args)
@@ -375,7 +375,7 @@ the file or directory names."
     (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project as a JSON object. Useful for LLMs to discover the current project context before performing file or code operations."
            :async-lambda project-mcp-server-get-last-active-project)
 
-    (:name "project-mcp-server-read-file" :description (format "Reads the entire contents of a file. Fails with an error message if the file is too large.\n- Limit: max file length is %d characters. Use project-mcp-server-read-file-lines for large files."
+    (:name "project-mcp-server-read-file" :description ,(format "Reads the entire contents of a file. Fails with an error message if the file is too large.\n- Limit: max file length is %d characters. Use project-mcp-server-read-file-lines for large files."
       project-mcp-server-max-file-length)
            :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root."))
