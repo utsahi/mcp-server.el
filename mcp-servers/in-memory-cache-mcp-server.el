@@ -36,7 +36,7 @@
 
 (cl-defmethod mcp-server-enumerate-tools ((this in-memory-cache-mcp-server))
   '(
-    (:name "add-replace-cache-entry" :description "Add a new entry to the in-memory cache or replace an existing entry."
+    (:name "add-replace-cache-entry" :description "Add or update a key-value pair in the in-memory cache. Specify an optional partition (defaults to 'default'). Overwrites existing value for the key. Useful for temporary storage, LLM scratchpads, or session state."
 	   :properties ((:name key :type "string" :required t :description "The key.")
 			(:name value :type "string" :required t :description "The value.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
@@ -45,7 +45,7 @@
 			     (puthash (gethash "key" arguments) (gethash "value" arguments) ht))
 			   (mcp-server-write-tool-call-text-result request "Success" cb-response)))
 
-    (:name "get-cache-entry" :description "Get the entry from the in-memory cache."
+    (:name "get-cache-entry" :description "Retrieve the value for a given key from the in-memory cache. Specify an optional partition (defaults to 'default'). Returns the value as a string, or an error if not found."
 	   :properties ((:name key :type "string" :required t :description "The key.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
@@ -56,7 +56,7 @@
 				  (error "Cache entry for the key '%s' not found" (gethash "key" arguments)))
 			      cb-response))))
 
-    (:name "get-keys" :description "Enumerate keys in the in-memory cache for the given partition."
+    (:name "get-keys" :description "List all keys in the in-memory cache for the specified partition (defaults to 'default'). Returns a JSON array of strings."
 	   :properties ((:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
 			   (let* ((ht (plist-get (in-memory-cache-mcp-server-ensure-partition arguments) :kvstore)))
@@ -66,7 +66,7 @@
 			      cb-response))
 			   ))
 
-    (:name "list-partitions" :description "Enumerate partitions in the in-memory cache."
+    (:name "list-partitions" :description "List all partitions in the in-memory cache. Returns a JSON array of partition names. Useful for LLMs managing multiple workspaces or sessions."
 	   :properties ()
 	   :async-lambda (lambda (request arguments cb-response)
 			   (mcp-server-write-tool-call-text-result
@@ -75,7 +75,7 @@
 			    cb-response)
 			   ))
 
-    (:name "drop-partitions" :description "Drop a partition from the in-memory cache."
+    (:name "drop-partitions" :description "Delete a partition and all its data from the in-memory cache. Specify the partition name. Use with care—this operation is irreversible."
           :properties ((:name partition :type "string" :required nil :description "name of the partition to drop."))
           :async-lambda (lambda (request arguments cb-response)
                           (unless (gethash (gethash "partition" arguments) in-memory-cache-mcp-server-partitions)
@@ -87,7 +87,7 @@
                            cb-response)
                           ))
 
-    (:name "stack-push" :description "Add a new entry on top of the stack."
+    (:name "stack-push" :description "Push a value onto the stack for the specified partition (defaults to 'default'). Useful for LLMs implementing stack-based workflows or undo/redo."
 	   :properties ((:name value :type "string" :required t :description "The value.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
@@ -99,7 +99,7 @@
 			    "Success"
 			    cb-response)))
 
-    (:name "stack-peek" :description "Peek one or more entries from the top of the stack."
+    (:name "stack-peek" :description "Return the top N values from the stack for the specified partition (defaults to 'default'). Does not remove them. Returns a JSON array."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to peek. 1 if unspecified.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)
@@ -109,7 +109,7 @@
 			      (json-encode (vconcat (seq-take (plist-get hte :stack) (or (gethash "count" arguments) 1))))
 			      cb-response))))
 
-    (:name "stack-pop" :description "Pop one or more entries from the top of the stack."
+    (:name "stack-pop" :description "Remove and return the top N values from the stack for the specified partition (defaults to 'default'). Returns a JSON array."
 	   :properties ((:name count :type "number" :required nil :description "Number of entries to pop. 1 if unspecified.")
 			(:name partition :type "string" :required nil :description "'default' if unspecified."))
 	   :async-lambda (lambda (request arguments cb-response)

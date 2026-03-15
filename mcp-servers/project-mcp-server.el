@@ -372,49 +372,49 @@ the file or directory names."
 
 (cl-defmethod mcp-server-enumerate-tools ((this project-mcp-server))
   `(
-    (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project."
+    (:name "project-mcp-server-get-last-active-project" :description "Returns the root directory of the last active project as a JSON object. Useful for LLMs to discover the current project context before performing file or code operations."
            :async-lambda project-mcp-server-get-last-active-project)
 
-    (:name "project-mcp-server-read-file" :description "Reads the entire contents of a file. Fails with an error message if the file is too large."
+    (:name "project-mcp-server-read-file" :description (format "Reads the entire contents of a file. Fails with an error message if the file is too large.\n- Limit: max file length is %d characters. Use project-mcp-server-read-file-lines for large files."
+      project-mcp-server-max-file-length)
            :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root."))
            :async-lambda project-mcp-server-read-file)
 
-    (:name "project-mcp-server-read-file-lines" :description "Reads a specific range of lines from a file. Useful as a fallback to
-read parts of a large file."
+    (:name "project-mcp-server-read-file-lines" :description "Reads a specific range of lines from a file. Input: file path, project root, start and end line numbers. Output: JSON-encoded string with the requested lines. Use for large files or when only a section is needed. LLMs should prefer this for efficiency."
            :properties ((:name file-path :type "string" :required t :description "File path.")
                         (:name project-root :type "string" :required t :description "Project root.")
                         (:name line-range-start :type "number" :required t :description "Line range start.")
                         (:name line-range-end :type "number" :required t :description "Line range end"))
            :async-lambda project-mcp-server-read-file-lines)
 
-    (:name "project-mcp-server-write-file-content" :description "Overwrites the entire file content."
+    (:name "project-mcp-server-write-file-content" :description "Overwrites the entire content of a file. Input: project root, file path, and new content. Use with care—this replaces all existing content. LLMs should validate file paths and content before calling."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name content :type "string" :required t :description "File content."))
            :async-lambda project-mcp-server-write-file-content)
 
-    (:name "project-mcp-server-replace-string-in-file" :description "Replaces all occurrences of a string in a file. Useful to update a large file when the lines or parts of the file to be replaced are known."
+    (:name "project-mcp-server-replace-string-in-file" :description "Replaces all occurrences of a string in a file. Input: project root, file path, search string, and replacement. Useful for LLMs updating code, refactoring, or making bulk changes. Returns the number of replacements."
            :properties ((:name project-root :type "string" :required t :description "Last active project.")
                         (:name file-path :type "string" :required t :description "If relative path, it is calculated relative to project-root.")
                         (:name search-string :type "string" :required t :description "String to replace.")
                         (:name replacement :type "string" :required t :description "Replacement string."))
            :async-lambda project-mcp-server-replace-string-in-file)    
 
-    (:name "project-mcp-server-fd" :description "Finds file or directory paths using 'fd'."
+    (:name "project-mcp-server-fd" :description "Finds file or directory paths using the 'fd' command. Input: directory path, match regexp, and optional types. Returns a list of matching paths. LLMs can use this for fast file discovery in large projects."
            :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
                         (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command.")
                         (:name types :type "array" :required nil :description "types one or more of [\"file\" \"directory\" \"executable\" \"empty\"]" :items (:type . "string")))
            :async-lambda project-mcp-server-fd)
 
-    (:name "project-mcp-server-git" :description "runs the given git command."
+    (:name "project-mcp-server-git" :description "Runs a git command in the context of the last active project. Input: directory, git command (from allowed list), and arguments. Output: command result or error. LLMs should use this for version control operations."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name git-command :type "string" :required t :description "git command." :enum ,project-mcp-server-allowed-git-commands)
                         (:name args :type "array" :required t :description "list of arguments." :items (:type . "string")))
            :async-lambda project-mcp-server-git)
 
     (:name "project-mcp-server-ripgrep"
-           :description "invokes 'rg'."
+           :description "Runs ripgrep ('rg') in the project. Input: directory, search pattern, context lines, file paths/extensions. Output: matching lines with context. LLMs should use this for fast, large-scale code search."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name search-pattern :type "string" :required t :description "A rust regular expression. Do NOT perform shell quoting.")
                         (:name context-before :type "number" :required t :description "Include these many lines of context that preceed the matching line. Default 0.")

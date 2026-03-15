@@ -19,6 +19,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+(require 'eieio)
 (defun mcp-server-debug-tool (fn fn-args)
   (let* ((args-ht (make-hash-table :test 'equal))
          (req (make-hash-table :test 'equal))
@@ -30,6 +31,19 @@
       (setq fn-args-copy (cddr fn-args-copy)))
     (apply fn (list req args-ht (lambda (ar) (message "Call completed with output.\n %s" ar))))))
 
-; (mcp-server-debug-tool 'web-mcp-server-render-web-page '(url "https://www.google.com/"))
+(defun mcp-server-test-call-tool (server-sym tool-name &rest fn-args)
+  (let* ((server (make-instance server-sym))
+         (args-ht (make-hash-table :test 'equal))
+         (req (make-hash-table :test 'equal))
+         (params (make-hash-table :test 'equal))
+         (fn-args-copy (copy-sequence fn-args)))
+    (puthash "id" 1 req)
+    (puthash "name" tool-name params)
+    (while fn-args-copy
+      (puthash (symbol-name (car fn-args-copy)) (cadr fn-args-copy) args-ht)
+      (setq fn-args-copy (cddr fn-args-copy)))
+    (puthash "arguments" args-ht params)
+    (puthash "params" params req)
+    (mcp-server-process-tools-call-request server req (lambda (ar) (message "Call completed with output. %s" ar)))))
 
-
+(provide 'mcp-server-test-util)

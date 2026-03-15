@@ -179,18 +179,18 @@ necessary.
 
 (cl-defmethod mcp-server-enumerate-tools ((this web-mcp-server))
   `(
-    (:name "web-mcp-server-url-retrieve" :description "Retreves a URL. Returns the RAW response including headers. To search
-the web for topics, news, quotes, weather etc., use https://html.duckduckgo.com/html/?q=<URL-ESCAPED-SEARCH-QUERY>."
+    (:name "web-mcp-server-url-retrieve" :description (format "Retrieves a URL. Returns the RAW response including headers.\nNotes for LLMs:\n- Prefer web-mcp-render-web-page for reading/summarization; use url-retrieve only when raw headers or unrendered HTML are required.\n- Limits: timeout ~%ds and max sent length %d chars. Use the start-offset property to paginate large responses.\n- If the response is truncated, call again with start-offset = previous_start + length(received).\n- Avoid fetching large binaries (archives, raw media). For searches prefer https://html.duckduckgo.com/html/?q=<URL-ESCAPED-SEARCH-QUERY>.\n- On timeout or error, surface the message and either retry once or request a narrower URL."
+      web-mcp-server-url-retrieve-timeout web-mcp-server-url-retrieve-max-length)
            :properties ((:name url :type "string" :required t :description "URL to fetch.")
                         (:name start-offset :type "number" :required nil :description "Skip first start-offset characters from the returned content. Use this to retrieve large pages incrementally."))
            :async-lambda web-mcp-server-url-retrieve)
 
-    (:name "web-mcp-render-web-page" :description "Returns the rendered html content of the URL. Response does not include links, markup etc. "
+    (:name "web-mcp-render-web-page" :description "Returns the rendered HTML content (text-only) of the URL. Response omits links and markup.\nNotes for LLMs:\n- Preferred for reading, summarization, and extraction of visible text.\n- Same limits apply: ~20s timeout and 250000 char max. Use start-offset to paginate long pages.\n- If truncated, call again with updated start-offset to retrieve remaining text.\n- For long pages, ask to focus on a section or use pagination. Avoid binary or very large pages."
            :properties ((:name url :type "string" :required t :description "URL to render.")
                         (:name start-offset :type "number" :required nil :description "Skip first start-offset characters from the returned content. Use this to retrieve large pages incrementally."))
            :async-lambda web-mcp-server-render-web-page)
 
-    (:name "web-mcp-server-yt-dlp-video-json-info" :description "Returns video info using yt-dlp."
+    (:name "web-mcp-server-yt-dlp-video-json-info" :description "Returns video metadata using yt-dlp (JSON).\nNotes for LLMs:\n- Use for video metadata, formats, and available captions. Captions are filtered to 'en' and 'en-orig' when present.\n- Output is minimized; if full captions or raw media are required, post-process externally or request a dedicated download.\n- This tool runs yt-dlp on the host and is subject to the server's time limits and process exit status. On non-zero exit, the error output is returned."
            :properties ((:name url :type "string" :required t :description "URL of the video."))
            :async-lambda web-mcp-server-yt-dlp-video-json-info)
     

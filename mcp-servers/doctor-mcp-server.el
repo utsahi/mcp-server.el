@@ -27,7 +27,7 @@
 
 (cl-defmethod mcp-server-enumerate-tools ((this doctor-mcp-server))
   '(
-    (:name "talk-to-doctor" :description "Talk to Emacs doctor"
+    (:name "talk-to-doctor" :description "Send a message to the Emacs doctor (Eliza-style psychotherapist). Returns a text response. Optionally, set 'think-for' to simulate the doctor thinking for N seconds before replying. Useful for playful or therapeutic interactions."
 	   :properties ((:name message :type "string" :required t :description "Next message to Emacs doctor.")
 			(:name think-for :type "number" :required nil :description "Number of seconds Emacs doctor should think over your problem."))
 	   :async-lambda (lambda (request arguments cb-response)

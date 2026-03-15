@@ -40,10 +40,10 @@
 
 (cl-defmethod mcp-server-enumerate-tools ((this emacs-mcp-server))
   `(
-    (:name "emacs-mcp-server-function-documentation" :description "Retreves elisp function documentation."
+    (:name "emacs-mcp-server-function-documentation" :description "Returns the documentation string for a given Emacs Lisp function symbol. Input is the function name as a string. Output is the full docstring, or an error if not found. Useful for code understanding, introspection, or LLMs that need to explain Emacs functions."
            :properties ((:name name :type "string" :required t :description "Name of the function."))
            :async-lambda emacs-mcp-server-function-documentation)
-    (:name "emacs-mcp-server-variable-documentation" :description "Retreves elisp variable documentation."
+    (:name "emacs-mcp-server-variable-documentation" :description "Returns the documentation string for a given Emacs Lisp variable symbol. Input is the variable name as a string. Output is the full docstring, or an error if not found. Useful for code understanding, introspection, or LLMs that need to explain Emacs variables."
            :properties ((:name name :type "string" :required t :description "Name of the variable."))
            :async-lambda emacs-mcp-server-variable-documentation)
     ))
