@@ -58,7 +58,7 @@ as a string and LEVEL is \\='verbose or \"verbose\"."
       (let* ((name (oref server -name))
              (buf (get-buffer-create
                    (if name
-                       (format "*mcp-server-%s-trace*" name)
+                       (format "*mcp-server-%s-%s-trace*" (type-of server) name)
                      (format "*mcp-server-%s-%d-trace*" (type-of server) (emacs-pid))))))
         (oset server -trace-buffer buf)
         buf)))
