@@ -164,6 +164,7 @@ output from the current buffer, and it can also make use of any additional argum
          (file-paths (mapcar 'identity (gethash "file-paths" arguments)))
          (context-before (or (gethash "context-before" arguments) 0))
          (context-after (or (gethash "context-after" arguments) 0))
+         (fixed-strings (gethash "fixed-strings" arguments))
          (custom-type "custom")
          (default-directory directory)
          (command (append (list "rg" "--color=never")
@@ -174,8 +175,10 @@ output from the current buffer, and it can also make use of any additional argum
                                           (string-join (mapcar (lambda (e) (format "%s" e)) file-extensions) ","))))
                           (when file-extensions
                             (list (format "-t%s" custom-type)))
+                          ;; If fixed-strings flag is provided, run rg in fixed-strings mode.
+                          (when fixed-strings (list "-F"))
                           (unless (= 0 context-before) (list "-A" (number-to-string context-before)))
-                          (unless (= 0 context-after) (list "-A" (number-to-string context-after)))
+                          (unless (= 0 context-after) (list "-B" (number-to-string context-after)))
                           (list  "--iglob" "!*~" "--iglob" "!*#" "--iglob" "!**/obj/**" "--iglob" "!**/objd/**"
                                  search-pattern)
                           (or file-paths (list directory)))))
@@ -205,13 +208,16 @@ output from the current buffer, and it can also make use of any additional argum
 (defun project-mcp-server-fd (request arguments cb-response)
   (let* ((directory (project-mcp-server-validate-path (gethash "directory-path" arguments)))
          (search-pattern (gethash "match-regexp" arguments))
+         (use-glob (gethash "use-glob" arguments))
          (types (gethash "types" arguments))
          (default-directory directory)
          (command (append '("fd"
                            "--color=never" "--absolute-path")
                           (if types (seq-mapcat (lambda (t) `("--type" ,t)) types))
-                          `(,search-pattern
-                            ,directory))))
+                          ;; If use-glob is truthy, pass --glob PATTERN; otherwise pass the pattern as-is (regex)
+                          (if use-glob
+                              `(,(concat "--glob" ) ,search-pattern ,directory)
+                            `(,search-pattern ,directory)))))
     (project-mcp-server-collect-process-output
      command
      (lambda (proc event args)
@@ -401,26 +407,60 @@ the file or directory names."
                         (:name replacement :type "string" :required t :description "Replacement string."))
            :async-lambda project-mcp-server-replace-string-in-file)    
 
-    (:name "project-mcp-server-fd" :description "Finds file or directory paths using the 'fd' command. Input: directory path, match regexp, and optional types. Returns a list of matching paths. LLMs can use this for fast file discovery in large projects."
+    (:name "project-mcp-server-fd" :description "Finds file or directory paths using the 'fd' command. Input: directory path, match regexp, and optional types. Returns a list of matching paths. LLMs can use this for fast file discovery in large projects. IMPORTANT: the match-regexp is passed directly to fd (no shell expansion). The 'match-regexp' is passed directly to fd (no shell expansion). When 'use-glob' is true, the value must be a glob pattern (for example "*.el" or "**/*.el") and not a regular expression. Patterns beginning with a dot (for example ".rc" or patterns that start with a '.') may match hidden files; fd filters hidden files by default. To include hidden files when running fd directly, use the --hidden (-H) flag (not exposed by this tool). Avoid shell quoting characters in the pattern; they are treated literally by fd.
+
+Exit codes: 0 = matches found, 1 = no matches, >1 = fd error. Examples (Linux/Unix):\n\n  -- Regex search for files containing 'TODO':\n     {"directory-path": "/path/to/project", "match-regexp": "TODO"}\n\n  -- Glob search for .md files (use fd --glob):\n     {"directory-path": "/path/to/project", "use-glob": true, "match-regexp": "*.md"}\n\nWindows example (PowerShell/CMD):\n\n  -- Literal search for 'README.md':\n     {"directory-path": "C:\\path\\to\\project", "match-regexp": "README.md"}\n\nNote: this tool invokes fd directly; shell quoting/expansion happens outside this function if callers run a shell before invoking it."
            :properties ((:name directory-path :type "string" :required t :description "Directory path within the project.")
-                        (:name match-regexp :type "string" :required t :description "Regular expression passed to the 'fd' command.")
+                        (:name match-regexp :type "string" :required t :description "Regular expression or glob passed to the 'fd' command.")
+                        (:name use-glob :type "boolean" :required nil :description "If non-nil, treat match-regexp as a glob and pass --glob to fd.")
                         (:name types :type "array" :required nil :description "types one or more of [\"file\" \"directory\" \"executable\" \"empty\"]" :items (:type . "string")))
            :async-lambda project-mcp-server-fd)
 
-    (:name "project-mcp-server-git" :description "Runs a git command in the context of the last active project. Input: directory, git command (from allowed list), and arguments. Output: command result or error. LLMs should use this for version control operations."
+    (:name "project-mcp-server-git" :description "Runs a git command in the context of the last active project. Input: directory, git command (from allowed list), and arguments. Output: command result or error. LLMs should use this for version control operations. IMPORTANT: the args are passed directly to git (no shell expansion). Do NOT rely on shell globbing or variable expansion in args. Examples (Linux/Unix):\n\n  -- Get status:\n     {"directory": "/path/to/project", "git-command": "status", "args": []}\n\n  -- Show blame for a file:\n     {"directory": "/path/to/project", "git-command": "blame", "args": ["--", "src/main.c"]}\n\nWindows example (PowerShell/CMD):\n\n  -- Example using a Windows path:\n     {"directory": "C:\\path\\to\\project", "git-command": "status", "args": []}\n\nNote: this tool invokes git directly; shell quoting/expansion happens outside this function if callers run a shell before invoking it."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name git-command :type "string" :required t :description "git command." :enum ,project-mcp-server-allowed-git-commands)
                         (:name args :type "array" :required t :description "list of arguments." :items (:type . "string")))
            :async-lambda project-mcp-server-git)
 
     (:name "project-mcp-server-ripgrep"
-           :description "Runs ripgrep ('rg') in the project. Input: directory, search pattern, context lines, file paths/extensions. Output: matching lines with context. LLMs should use this for fast, large-scale code search."
+           :description "Runs ripgrep ('rg') in the project. Input: directory, search pattern, context lines, file paths/extensions. Output: matching lines with context. LLMs should use this for fast, large-scale code search. IMPORTANT: the search-pattern is passed directly to rg (no shell expansion) and is interpreted by ripgrep's PCRE2 engine. Do NOT include additional shell quoting characters as they will be treated literally.
+
+Common pitfalls and tips:
+
+- Word-boundary \b: PCRE2 defines word characters as [A-Za-z0-9_]. Tokens containing non-word characters (for example hyphens like 'mcp-server') will not be matched by \b anchors. Use plain 'mcp-server' or explicit lookarounds such as (?<![A-Za-z0-9_])mcp-server(?![A-Za-z0-9_]).
+- JSON / escaping: when sending patterns in JSON, backslashes must be escaped. Example: to send \b you must provide "\\b" in the JSON payload.
+- Literal matches: to match characters like '*', '?', '$', or patterns that resemble shell expansions, set 'fixed-strings' true to run rg with -F (fixed-strings) for literal matching.
+
+Exit codes: 0 = matches found, 1 = no matches, >1 = rg error (e.g., invalid regex). Examples (Linux/Unix):
+
+  -- Literal search for asterisk (*) using fixed-strings:
+     {"directory": "/path/to/project", "search-pattern": "*", "fixed-strings": true}
+
+  -- Regex search for any lowercase letter [a-z]:
+     {"directory": "/path/to/project", "search-pattern": "[a-z]"}
+
+  -- Literal search for a string that looks like a shell expansion (e.g. $(echo hi)):
+     {"directory": "/path/to/project", "search-pattern": "$(echo hi)", "fixed-strings": true}
+
+Windows examples (PowerShell/CMD):
+
+  -- Literal search for asterisk (*) (PowerShell/CMD):
+     {"directory": "C:\\path\\to\\project", "search-pattern": "*", "fixed-strings": true}
+
+  -- Literal search for an environment-variable-like token (CMD):
+     {"directory": "C:\\path\\to\\project", "search-pattern": "%USERNAME%", "fixed-strings": true}
+
+  -- PowerShell: to avoid PowerShell interpolation you would normally single-quote the argument; however this tool invokes rg directly so quoting is not applied here. Use fixed-strings for literal matches:
+     {"directory": "C:\\path\\to\\project", "search-pattern": "$(echo hi)", "fixed-strings": true}
+
+Note: examples show platform-specific shell characters. The same principle applies across platforms: this tool invokes rg directly (no shell expansion), so patterns are interpreted by ripgrep/PCRE2. If callers run a shell before invoking this tool, shell-specific quoting/expansion may apply there; prefer using the fixed-strings flag when you need literal matching."
            :properties ((:name directory :type "string" :required t :description "Project discovered with 'project-get-last-active-project'")
                         (:name search-pattern :type "string" :required t :description "A rust regular expression. Do NOT perform shell quoting.")
                         (:name context-before :type "number" :required t :description "Include these many lines of context that preceed the matching line. Default 0.")
                         (:name context-after :type "number" :required t :description "Include these many lines of context that follow the matching line. Default 0.")
                         (:name file-paths :type "array" :required nil :description "File paths." :items (:type . "string"))
-                        (:name file-extensions :type "array" :required nil :description "File extensions." :items (:type . "string")))
+                        (:name file-extensions :type "array" :required nil :description "File extensions." :items (:type . "string"))
+                        (:name fixed-strings :type "boolean" :required nil :description "If non-nil, run rg in fixed-strings mode (-F) to match the search-pattern literally rather than as a regex.") )
            :async-lambda
            project-mcp-server-ripgrep)
     )
