@@ -36,9 +36,10 @@
   (when (oref this -timeout-timer)
     (cancel-timer (oref this -timeout-timer)))
   (with-temp-buffer
-    (setq-local require-final-newline nil)
     (set-buffer-file-coding-system 'utf-8)
     (insert result)
+    (unless (string-suffix-p "\n" result)
+      (insert "\n"))
     (let ((save-silently t)
           (make-backup-files nil))
       (write-file (oref this -response-file) nil)))
