@@ -33,7 +33,10 @@ echo "$(date): Starting $mcpserver" >> "$logfile"
 
 while read -r line; do
     echo "$(date): Sending request: ${line:0:100} ..." >> "$logfile"
-    echo $line > $infile
+
+    # preserve leading spaces and backslashes exactly
+    printf '%s\n' "$line" > "$infile"
+
     echo "$(date): Request wc stats: $(wc "$infile")" >> "$logfile"
 
     if ! emacsclient -e "(mcp-server-file-transport-dispatch-request \"$session\" "$mcpserver" \"$infile\" \"$outfile\" $timeout)" >> "$logfile" 2>&1; then
